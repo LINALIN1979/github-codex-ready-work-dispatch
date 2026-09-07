@@ -56,6 +56,10 @@ git -C D:\repos\my-project push
 
 Setup does not register the runner automatically because GitHub supplies a short-lived registration token to the repository owner.
 
+## Pinned submodule integration
+
+A host may pin this public repository as a Git submodule and call `invoke-dispatch.ps1` directly. Keep the real host configuration outside Git and pass its absolute local path with `-Config`. The invocation fails closed when the configuration is missing or the executable files in the submodule have local changes.
+
 ## Create a Ready work item — about 2 minutes
 
 ```powershell
