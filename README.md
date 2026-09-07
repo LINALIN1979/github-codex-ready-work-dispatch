@@ -37,7 +37,7 @@ Only trusted base-branch writers should be able to trigger this runner. Read [SE
   -RunnerLabel my-project-codex-dispatch
 ```
 
-Use `-ExpectedRunnerUser`, `-WorkflowPath` or `-AdditionalTriggerPath` only when the host needs those extra restrictions.
+Use `-ExpectedRunnerUser`, `-WorkflowPath` or `-AdditionalTriggerPath` only when the host needs those extra restrictions. Existing installations can pass `-DataRoot` and `-HostLockRoot` to preserve their claim, work and log locations.
 
 Setup detects the host GitHub remote, Codex and Python. It installs a checked copy of the dispatcher under `%LOCALAPPDATA%`, writes the local untracked config, and creates:
 

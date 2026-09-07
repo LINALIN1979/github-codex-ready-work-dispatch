@@ -8,7 +8,9 @@ param(
     [string]$WorkItemsPath = 'docs/work-items',
     [string]$WorkflowPath = '.github/workflows/codex-ready-dispatch.yml',
     [string]$ExpectedRunnerUser = '',
-    [string[]]$AdditionalTriggerPath = @()
+    [string[]]$AdditionalTriggerPath = @(),
+    [string]$DataRoot = '',
+    [string]$HostLockRoot = ''
 )
 $ErrorActionPreference = 'Stop'
 $source = $PSScriptRoot
@@ -19,7 +21,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Host repo needs an origin remote.' }
 if ($remote -match 'github\.com[:/](?<repo>[^/]+/[^/.]+)(?:\.git)?$') { $repository = $Matches.repo } else { throw 'Origin must be a GitHub repository URL.' }
 $repositorySlug = $repository -replace '/', '-'
 $installDirectory = Join-Path $InstallRoot $repositorySlug
-$dataDirectory = Join-Path $installDirectory 'data'
+$dataDirectory = if ($DataRoot) { $DataRoot } else { Join-Path $installDirectory 'data' }
+$lockDirectory = if ($HostLockRoot) { $HostLockRoot } else { Join-Path $InstallRoot 'host-lock' }
 New-Item -ItemType Directory -Force -Path $installDirectory, $dataDirectory | Out-Null
 $version = (& git -C $source rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { $version = 'source-without-git-version' }
@@ -55,7 +58,7 @@ $config = [ordered]@{
     repository = $repository
     remote = $remote
     root = $dataDirectory
-    host_lock_root = (Join-Path $InstallRoot 'host-lock')
+    host_lock_root = $lockDirectory
     base_branch = $BaseBranch
     work_items_path = $WorkItemsPath
     codex = (Resolve-Path -LiteralPath $Codex).Path
