@@ -1,0 +1,14 @@
+{
+  "repository": "OWNER/HOST_PROJECT",
+  "remote": "git@github.com:OWNER/HOST_PROJECT.git",
+  "root": "C:/dispatch/projects/HOST_PROJECT/data",
+  "codex": "C:/path/to/validated/codex.exe",
+  "codex_version": "codex-cli X.Y.Z",
+  "task_seconds": 2700,
+  "batch_seconds": 14400,
+  "max_items": 10,
+  "host_lock_root": "C:/dispatch/host-lock",
+  "base_branch": "main",
+  "work_items_path": "docs/work-items",
+  "python": "C:/path/to/python.exe"
+}
