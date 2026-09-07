@@ -133,7 +133,7 @@ Disable the GitHub workflow or stop the runner. Keep the local data directory an
 
 - `setup.ps1` — one-command host setup.
 - `new-work-item.ps1` — creates the next minimal WI.
-- `invoke-dispatch.ps1` — verifies installed files and runs the bridge.
+- `invoke-dispatch.ps1` — verifies an installed copy or clean pinned Git checkout, then runs the bridge.
 - `bridge.py` — selection, claim, Codex execution and result publication.
 - `templates/ready-dispatch.yml.template` — workflow installed by setup.
 - `config.example.json` — configuration reference; real config stays local.
