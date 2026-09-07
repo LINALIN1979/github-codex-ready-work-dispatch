@@ -56,6 +56,10 @@ git -C D:\repos\my-project push
 
 Setup does not register the runner automatically because GitHub supplies a short-lived registration token to the repository owner.
 
+## Pinned submodule integration
+
+A host may pin this public repository as a Git submodule and call `invoke-dispatch.ps1` directly. Keep the real host configuration outside Git and pass its absolute local path with `-Config`. The invocation fails closed when the configuration is missing or the executable files in the submodule have local changes.
+
 ## Create a Ready work item — about 2 minutes
 
 ```powershell
@@ -133,7 +137,7 @@ Disable the GitHub workflow or stop the runner. Keep the local data directory an
 
 - `setup.ps1` — one-command host setup.
 - `new-work-item.ps1` — creates the next minimal WI.
-- `invoke-dispatch.ps1` — verifies installed files and runs the bridge.
+- `invoke-dispatch.ps1` — verifies an installed copy or clean pinned Git checkout, then runs the bridge.
 - `bridge.py` — selection, claim, Codex execution and result publication.
 - `templates/ready-dispatch.yml.template` — workflow installed by setup.
 - `config.example.json` — configuration reference; real config stays local.
