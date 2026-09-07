@@ -6,7 +6,11 @@ The dispatcher creates `refs/heads/codex/dispatch-state` in the host Git remote 
 
 Each claim records the WI path and content blob, base commit, attempt ID, work branch, local recovery checkout, Codex task ID, run URL, timestamps and result. A normal non-force Git push acts as compare-and-swap: two dispatchers reading the same state cannot both publish the next commit. Only the successful writer starts Codex.
 
-Execution conditions are `running`, `review`, `blocked`, `quota`, `execution_error` and `timeout`. These are internal execution facts, not work-item lifecycle states.
+Execution conditions are `running`, `review`, `blocked`, `quota`, `execution_error`, `timeout` and `publication_error`. These are internal execution facts, not work-item lifecycle states.
+
+PR metadata and the additive schema-v1 `pending_publication` record are defined in
+[coordinator-handoff.md](coordinator-handoff.md). Readers must tolerate these optional
+fields; old claims without a completed-result snapshot need manual reconciliation.
 
 A claim does not expire. A crash can leave `running`; this intentionally blocks another task until a coordinator proves the old process stopped and reconciles preserved work. See [recovery.md](recovery.md).
 

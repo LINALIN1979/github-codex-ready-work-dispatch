@@ -1,6 +1,6 @@
 # WI-001 — Reliable Draft PR and coordinator handoff
 
-Status: Ready
+Status: Review
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -12,7 +12,7 @@ idempotent Review/Blocked Draft PR publication and a generic event-driven coordi
 contract, tests, review branches, push and PR creation; no merge or live deployment.
 Source task: 01a06817-c097-7f92-acf7-0a323783f344.
 References: AGENTS.md, docs/work-items/README.md, docs/internals.md,
-docs/recovery.md, SECURITY.md. Host governance was read from Home Rolls On remote main.
+docs/recovery.md, SECURITY.md. Target host governance was read from its verified remote main.
 
 ## Goal
 
@@ -58,4 +58,10 @@ PowerShell AST parse, workflow YAML/actionlint and scope/security/diff checks.
 
 ## Results / evidence links
 
-Not started. Ready checkpoint precedes implementation.
+Ready checkpoint: `9caa9a0`; then In Progress during implementation, now Review.
+Nineteen offline tests passed in 114.829 seconds, including real temporary Git remotes,
+failed handoff recovery and an interrupted evidence push. PowerShell/YAML/actionlint,
+isolated setup/hash validation, Python 3.10 grammar and scope/diff checks passed.
+See `docs/validation.md` for evidence and `docs/coordinator-handoff.md` for the contract.
+External provider delivery is host-owned validation, not proven by fake GitHub API tests.
+Out-of-scope changes: None. No merge, active installation change or live cutover.

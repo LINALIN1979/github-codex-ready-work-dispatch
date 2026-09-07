@@ -113,6 +113,12 @@ The WI lifecycle remains in its original Markdown file. The internal claim recor
 
 Successful work is pushed to a dedicated branch and reported as `Review`. The dispatcher never merges it.
 
+Review and Blocked results require a verified Draft PR. Repeated events and technical
+retries reuse the same PR. PR permission/transport failures pause dispatch and retain
+result evidence; repair with `-PublishWi WI-NNN` (or workflow `publish_wi`) without
+rerunning Codex. See the [coordinator handoff contract](docs/coordinator-handoff.md) for
+GitHub settings, durable state, event integration and authority boundaries.
+
 Quota, timeout and execution failures preserve the checkout and pause further dispatch. After fixing the technical problem, retry from **Actions → Codex Ready work dispatcher → Run workflow**, entering the same `WI-NNN`. Product or approval blockers require a new decision, not a technical retry.
 
 See [docs/recovery.md](docs/recovery.md) for the recovery checklist.

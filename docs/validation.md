@@ -1,5 +1,43 @@
 # Validation — 2026-09-07
 
+## WI-001 reliable PR handoff — 2026-09-08
+
+Baseline remote main: `8f3ff77a61009a7e5651208c7b4b8a2257230dae`; clean fresh clone and
+`pull --ff-only` verified. Direct Owner authorization and Ready gate committed in `9caa9a0`
+before implementation. Work now requests Review; no merge/deployment is part of this WI.
+
+`python -m unittest discover -s . -p "test_*.py" -v`: **19 tests passed in 114.829 s**
+on Windows / Python 3.14.6. Git helper path was set only for the test process.
+The final suite covers Review, Blocked, same-head duplicate/update/retry, preserving human
+PR text/title/template, lost POST response, known PR with delayed empty list, closed/merged/
+non-draft/retargeted/foreign/ambiguous PR rejection, missing token and HTTP 401/403/422/429/500
+sanitization, failed/unverified PATCH, real Git durable publication-error pause, publication-only
+recovery with one Developer invocation, and interrupted evidence push/dirty-checkout fencing.
+Existing tests retain real local Git CAS conflicts, claim deduplication, quota/timeout,
+environment token stripping, host locks, custom base and pinned submodule behavior.
+
+Additional checks passed:
+
+- Python AST accepted all Python sources under the Python 3.10 grammar.
+- PowerShell AST parsed all four scripts.
+- PyYAML 6.0.3 parsed the rendered workflow and host YAML; explicit assertions checked
+  `publish_wi` wiring, trusted push/manual triggers, contents read / pull-requests write.
+- Actionlint 1.7.12 passed the rendered template and actual setup-generated workflow
+  with the fixture runner label declared. No new PR-triggered local runner was introduced.
+- `setup.ps1` ran only against a disposable `fixture/repo` Git host and installation
+  directory. It generated PublishWi wiring and passed installed-file hash validation.
+  Python `--version` was the safe executable substitute; no live Codex task was started.
+- Work-item state vocabulary, host schema and Markdown links checked; `git diff --check`
+  and source scope/credential-pattern scans passed. No new runtime Python dependency.
+
+GitHub API/Codex behavior is simulated; Git remotes, commits, pushes and CAS are real and
+local. No live fixture, account credential change, provider task, runner upgrade or historical
+WI execution occurred. The work keeps schema version 1 with optional additive PR fields;
+legacy results without a publication snapshot require manual reconciliation. Git/PR/state
+writes are not atomic; running fences and preserved local evidence cover interruption gaps.
+
+## Historical baseline evidence
+
 Python 3.14; Git 2.54.0.windows.1; Windows.
 `python -m unittest discover -s . -p "test_*.py" -v`: 11 tests passed.
 Coverage includes Ready gates, duplicate/crash fencing, quota recovery, malformed results,

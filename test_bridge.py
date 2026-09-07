@@ -133,7 +133,7 @@ class RemoteCAS(unittest.TestCase):
                     (log_dir / 'answer.json').write_text(json.dumps(answer))
                     return outcome, 0 if outcome == 'completed' else 1
                 config = {'remote': str(remote), 'repository': 'fixture/repo', 'codex': 'unused', 'base_branch': base_branch}
-                with patch.dict(os.environ, {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'protocol.file.allow', 'GIT_CONFIG_VALUE_0': 'always'}), patch('bridge.execute', side_effect=fake_execute), patch('bridge.create_pr', return_value={}):
+                with patch.dict(os.environ, {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'protocol.file.allow', 'GIT_CONFIG_VALUE_0': 'always'}), patch('bridge.execute', side_effect=fake_execute), patch('bridge.create_pr', return_value={'pr_status': 'published', 'pr_url': 'https://github.com/fixture/repo/pull/1'}):
                     run_one(config, root / 'data', store, record, False)
                 _, final = store.read()
                 self.assertEqual(final['claims']['WI-005']['status'], 'review' if outcome == 'completed' else 'quota')

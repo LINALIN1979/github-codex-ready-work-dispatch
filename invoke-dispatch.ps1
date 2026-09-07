@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$Config,
     [string]$RetryWi = '',
+    [string]$PublishWi = '',
     [switch]$ValidateOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -28,6 +29,8 @@ if (Test-Path -LiteralPath $manifestPath) {
 }
 if (-not (Test-Path -LiteralPath $Config)) { throw "Missing config: $Config" }
 if ($RetryWi -and $RetryWi -notmatch '^WI-\d+$') { throw 'RetryWi must look like WI-012.' }
+if ($PublishWi -and $PublishWi -notmatch '^WI-\d+$') { throw 'PublishWi must look like WI-012.' }
+if ($RetryWi -and $PublishWi) { throw 'Choose RetryWi or PublishWi, never both.' }
 $settings = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
 if ($ValidateOnly) {
     & $settings.codex --version
@@ -37,5 +40,6 @@ if ($ValidateOnly) {
 }
 $arguments = @((Join-Path $installDirectory 'bridge.py'), '--config', $Config)
 if ($RetryWi) { $arguments += @('--retry-wi', $RetryWi) }
+if ($PublishWi) { $arguments += @('--publish-wi', $PublishWi) }
 & $settings.python @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Dispatch stopped. Claims and local recovery files were preserved.' }
