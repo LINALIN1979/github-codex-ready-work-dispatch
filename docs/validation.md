@@ -50,6 +50,19 @@ manual Ready support are covered. The complete suite and static checks will be r
 at the branch checkpoint. No host repository, live dispatcher, claims, runner or
 provider was used. WI-005 remains Review.
 
+## WI-007 dispatcher role/tier contract analysis — 2026-09-09
+
+WI-006 is internally validated on Draft PR #8. Analysis of `bridge.py` confirms this
+is a Developer-oriented dispatcher with a closed execution-role vocabulary, not a
+host-neutral authority engine. `Implementer`, `Tester / Playtester` and
+`Docs / Traceability` remain the only execution roles; T1/T2 prefixes remain the only
+capability tiers. README/integration docs now state that arbitrary host roles are not
+supported, and coordinator trust-policy roles are separate.
+
+No code change was manufactured. A possible future host-neutral implementation is only
+described as requiring a separately authorized WI. No live host, runner, provider or
+Codex behavior was exercised. WI-007 remains Review.
+
 ## WI-006 coordinator actor-role authorization binding — 2026-09-09
 
 WI-005 is internally validated on Draft PR #7. The former independent actor and role
