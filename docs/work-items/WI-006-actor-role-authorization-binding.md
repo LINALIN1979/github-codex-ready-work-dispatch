@@ -1,6 +1,6 @@
 # WI-006 — Coordinator actor-role authorization binding
 
-Status: Ready
+Status: Review
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard

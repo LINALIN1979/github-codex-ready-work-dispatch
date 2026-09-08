@@ -1,6 +1,6 @@
 # WI-004 — Independent GitHub-hosted CI
 
-Status: Ready
+Status: Review
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
