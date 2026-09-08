@@ -819,6 +819,9 @@ def validate_receipt(command_id, receipt):
         if (not receipt['finished_at'] or not receipt['error_code'] or
                 receipt['execution_may_have_started'] is not False):
             raise RuntimeError('Unknown or malformed coordination receipt schema')
+        if ((receipt['error_code'] == 'command_origin_invalid') !=
+                (receipt['command_commit'] is None)):
+            raise RuntimeError('Unknown or malformed coordination receipt schema')
     else:
         if (receipt['command_commit'] is None or not receipt['finished_at'] or
                 receipt['execution_may_have_started'] is not True or
@@ -1271,6 +1274,8 @@ Return the required JSON result. Empty decision fields are allowed only for Revi
             if event.get('type') == 'thread.started':
                 thread = event.get('thread_id', '')
                 uuid.UUID(thread)
+                if retry and record.get('thread_id') and thread != record['thread_id']:
+                    raise RuntimeError('Resume returned a different Developer task')
                 store.patch(wi, attempt, thread_id=thread)
         status, code = execute(command, prompt, folder, log_dir, config.get('task_seconds', 2700),
                                event_hook, lambda: store.patch(wi, attempt, heartbeat_at=now()))

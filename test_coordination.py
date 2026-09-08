@@ -7,7 +7,7 @@ import unittest
 import uuid
 from unittest.mock import patch
 
-from bridge import (CoordinationStore, claim_coordination_execution, run_revision,
+from bridge import (CoordinationStore, claim_coordination_execution, run_one, run_revision,
                     coordination_observations, process_coordination,
                     validate_coordination_command, validate_coordination_context,
                     validate_receipt, verify_coordination_actor, verify_feedback)
@@ -320,6 +320,45 @@ class CoordinationCommandTests(unittest.TestCase):
             self.assertEqual(calls[0][2], checkout)
             self.assertIn('Status: Review', wi.read_text(encoding='utf-8'))
 
+    def test_technical_retry_rejects_mismatched_resumed_task_without_persisting_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkout = root / 'work' / 'saved'
+            wi = checkout / 'docs' / 'work-items' / 'WI-001-test.md'
+            wi.parent.mkdir(parents=True)
+            wi.write_text('# WI-001\n\nStatus: Blocked\n', encoding='utf-8')
+            record = {
+                'wi': 'WI-001', 'path': 'docs/work-items/WI-001-test.md',
+                'attempt_id': ATTEMPT, 'thread_id': TASK, 'checkout': str(checkout),
+                'branch': 'codex/test', 'base_sha': BASE, 'role': 'Implementer',
+                'tier': 'T2 Standard', 'run_url': 'coordination:cmd-001',
+            }
+            store = FakeStateStore({'schema_version': 1, 'paused': None,
+                                    'claims': {'WI-001': dict(record)}})
+            mismatched = '22222222-2222-4222-8222-222222222222'
+
+            def fake_git(repo, *args, **kwargs):
+                if args == ('rev-parse', 'FETCH_HEAD'):
+                    return completed(BASE)
+                return completed('')
+
+            def fake_execute(command, prompt, folder, log_dir, timeout, on_event, heartbeat):
+                self.assertIn('resume', command)
+                self.assertIn(TASK, command)
+                on_event({'type': 'thread.started', 'thread_id': mismatched})
+                raise AssertionError('mismatched event must stop execution immediately')
+
+            config = {'remote': 'fixture.git', 'repository': 'fixture/repo',
+                      'codex': 'codex.exe', 'base_branch': 'main'}
+            with patch('bridge.git', side_effect=fake_git), \
+                    patch('bridge.checkpoint', return_value=HEAD), \
+                    patch('bridge.execute', side_effect=fake_execute), \
+                    self.assertRaisesRegex(RuntimeError, 'different Developer task'):
+                run_one(config, root, store, record, True)
+            self.assertEqual(store.state['claims']['WI-001']['thread_id'], TASK)
+            self.assertFalse(any('thread_id' in fields for _, _, fields in store.patches))
+            self.assertTrue((root / 'logs' / ATTEMPT / 'recovery.txt').exists())
+
     def test_interrupted_command_receipt_prevents_replay(self):
         command = dict(self.command)
         config = dict(self.config, coordination_ref='refs/heads/codex/coordination')
@@ -454,12 +493,11 @@ class CoordinationStoreTests(unittest.TestCase):
         receipt = CoordinationStore._receipt(
             'cmd-1', 'rejected', HEAD, observed, False, 'command_schema_invalid')
         self.assertIs(validate_receipt('cmd-1', receipt), receipt)
-        self.assertEqual(validate_receipt(
-            'cmd-1', dict(receipt, command_commit=None))['status'], receipt['status'])
         for changed in (
                 dict(receipt, extra='forbidden'),
                 dict(receipt, schema_version=2),
                 dict(receipt, command_commit='not-a-sha'),
+                dict(receipt, command_commit=None),
                 dict(receipt, execution_may_have_started=True),
                 dict(receipt, observed=dict(observed, extra='forbidden'))):
             with self.subTest(changed=changed), self.assertRaises(RuntimeError):
@@ -468,6 +506,8 @@ class CoordinationStoreTests(unittest.TestCase):
             'cmd-1', 'rejected', None, coordination_observations(HEAD, None),
             False, 'command_origin_invalid')
         self.assertIs(validate_receipt('cmd-1', missing), missing)
+        with self.assertRaises(RuntimeError):
+            validate_receipt('cmd-1', dict(missing, command_commit=HEAD))
         forged_missing = copy.deepcopy(missing)
         forged_missing['observed']['repository'] = 'fixture/repo'
         with self.assertRaises(RuntimeError):

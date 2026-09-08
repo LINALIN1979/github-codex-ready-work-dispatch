@@ -81,8 +81,9 @@ receipt fields reject the whole document. Command IDs, timestamps, hashes/digest
 PR/result identities and status-dependent observations are validated on every read and write.
 Malformed untrusted strings are recorded only as null or a one-way checkout digest; accepted and
 completed receipts require the verified actor plus exact WI, claim, task, branch, PR and head
-evidence. `command_commit` is null only when rejection occurs
-before a command origin can be established; `observed.document_revision` still records the exact
+evidence. `command_commit` is null only for a `command_origin_invalid` rejection before a command
+origin can be established. Schema-invalid and every later rejection requires the valid origin
+commit SHA; `observed.document_revision` still records the exact
 coordination document that was inspected.
 
 ## Invoke and recovery
@@ -112,3 +113,6 @@ A successful revision resumes the recorded task ID, checkpoints the same branch,
 same Draft PR handoff block and finishes the receipt with result evidence. Missing tasks, dirty
 checkouts, stale main/WI/PR heads, mismatched roles/actors or ambiguous claims stop without a
 replacement task, force push, fence clearing, merge or lifecycle approval.
+The same task-identity check applies to `technical_retry`: if Codex reports a different
+`thread.started` ID while resuming a saved task, execution stops and the replacement ID is never
+written to claim state.
