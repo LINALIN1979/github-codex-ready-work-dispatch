@@ -15,6 +15,8 @@ import sys
 import threading
 import time
 import urllib.request
+import urllib.parse
+import urllib.error
 import uuid
 
 STATE_REF = 'refs/heads/codex/dispatch-state'
@@ -281,41 +283,206 @@ def checkpoint(folder, branch, message):
     return git(folder, 'rev-parse', 'HEAD').stdout.strip()
 
 
-def create_pr(config, folder, record, result):
+class PublicationError(RuntimeError):
+    """Only fixed error codes may be published; never include tokens/API response bodies."""
+
+
+def github_api(config, method, path, data=None):
     token = os.environ.get('BRIDGE_TOKEN')
     if not token:
-        return {'pr_note': 'No PR token; use the published compare link.'}
-    template = folder / '.github' / 'pull_request_template.md'
-    body = template.read_text(encoding='utf-8') if template.exists() else ''
-    body = body.replace('Issue:  ', f'Issue: {record["path"]}  ')
-    body = body.replace('## What changed\n\n-', '## What changed\n\n' + result['summary'])
-    body = body.replace('## What did NOT change\n\n-', '## What did NOT change\n\nNo approval or automatic merge is granted by this dispatcher.')
-    body = body.replace('## Known limitations\n\n-', '## Known limitations\n\nAgent evidence requires independent review.\n\n' + result['validation'])
-    body += f'\n\nDispatch evidence: {record["run_url"]}\n'
-    data = json.dumps({'title': f'{record["wi"]}: {result["outcome"]} requested',
-                       'head': record['branch'], 'base': config.get('base_branch', 'main'), 'body': body, 'draft': True}).encode()
-    request = urllib.request.Request(f'https://api.github.com/repos/{config["repository"]}/pulls', data=data,
+        raise PublicationError('missing_token')
+    request = urllib.request.Request(f'https://api.github.com/repos/{config["repository"]}/{path}',
+        data=json.dumps(data).encode() if data is not None else None,
         headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',
-                 'Content-Type': 'application/json', 'User-Agent': 'github-codex-ready-work-dispatch'}, method='POST')
+                 'Content-Type': 'application/json', 'User-Agent': 'github-codex-ready-work-dispatch',
+                 'X-GitHub-Api-Version': '2022-11-28'}, method=method)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            return {'pr_url': json.load(response)['html_url']}
-    except Exception as error:
-        # Work is already durable. Never rerun an agent because PR creation failed.
-        return {'pr_note': f'PR creation unavailable ({type(error).__name__}); use compare link.'}
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        code = error.code
+        error.close()
+        raise PublicationError(f'http_{code}') from None
+    except Exception:
+        raise PublicationError('transport_or_response_error') from None
+
+
+def verify_pr(config, record, pr):
+    try:
+        number = pr['number']
+        valid = (type(number) is int and number > 0 and
+                 pr['html_url'] == f'https://github.com/{config["repository"]}/pull/{number}' and
+                 pr['head']['repo']['full_name'] == config['repository'] and
+                 pr['base']['repo']['full_name'] == config['repository'] and
+                 pr['head']['ref'] == record['branch'] and
+                 pr['base']['ref'] == config.get('base_branch', 'main') and
+                 pr['state'] == 'open' and pr['draft'] is True and not pr.get('merged_at'))
+    except (KeyError, TypeError):
+        valid = False
+    if not valid:
+        raise PublicationError('pr_identity_or_lifecycle_conflict')
+    return pr
+
+
+def create_pr(config, folder, record, result):
+    """Reconcile a stable repo/base/head identity before every write (including retries)."""
+    # Look across bases too: a human-retargeted PR is a conflict, not permission to duplicate.
+    query = urllib.parse.urlencode({'state': 'all',
+        'head': config['repository'].split('/')[0] + ':' + record['branch'], 'per_page': 100})
+
+    def lookup():
+        matches = github_api(config, 'GET', 'pulls?' + query)
+        # More than one match or a full page is ambiguous; never create in that case.
+        if not isinstance(matches, list) or len(matches) > 1:
+            raise PublicationError('ambiguous_pr_lookup')
+        return verify_pr(config, record, matches[0]) if matches else None
+
+    start, end = '<!-- codex-dispatch:begin -->', '<!-- codex-dispatch:end -->'
+    block = (f'{start}\nWork item: {record["path"]}\nOutcome: {result["outcome"]}\n'
+             f'Attempt: {record["attempt_id"]}\nRun: {record["run_url"]}\n'
+             f'Result: {record["result_path"]}\n\n{result["summary"]}\n\n'
+             f'Validation: {result["validation"]}\n\nDecision owner: {result["decision_owner"]}\n'
+             f'Question: {result["question"]}\nOptions: {result["options_and_tradeoffs"]}\n'
+             f'Recommendation: {result["recommendation"]}\n'
+             f'Coordinator handoff only; no approval or merge authority.\n{end}')
+    # Evidence cannot inject another managed block.
+    if block.count(start) != 1 or block.count(end) != 1:
+        raise PublicationError('invalid_evidence_marker')
+
+    def body_for(old):
+        if start in old or end in old:
+            if old.count(start) != 1 or old.count(end) != 1 or old.index(start) > old.index(end):
+                raise PublicationError('ambiguous_managed_body')
+            return old[:old.index(start)] + block + old[old.index(end) + len(end):]
+        return old.rstrip() + '\n\n' + block + '\n'
+
+    known = None
+    if record.get('pr_number'):
+        known = verify_pr(config, record, github_api(config, 'GET', f'pulls/{record["pr_number"]}'))
+    pr = lookup()
+    if known and pr and known['number'] != pr['number']:
+        raise PublicationError('ambiguous_pr_identity')
+    pr = pr or known
+    if pr is None:
+        template = folder / '.github' / 'pull_request_template.md'
+        body = body_for(template.read_text(encoding='utf-8') if template.exists() else '')
+        try:
+            pr = github_api(config, 'POST', 'pulls', {
+                'title': f'{record["wi"]}: {result["outcome"]} requested', 'head': record['branch'],
+                'base': config.get('base_branch', 'main'), 'body': body, 'draft': True})
+        except PublicationError:
+            # A lost response/422 can follow successful creation. Query once, never POST twice.
+            pr = lookup()
+            if pr is None:
+                raise
+        pr = verify_pr(config, record, pr)
+    body = body_for(pr.get('body') or '')
+    if body != (pr.get('body') or ''):
+        # Preserve human title, template, review text and labels outside our block.
+        github_api(config, 'PATCH', f'pulls/{pr["number"]}', {'body': body})
+    pr = verify_pr(config, record, github_api(config, 'GET', f'pulls/{pr["number"]}'))
+    if (pr.get('body') or '') != body:
+        raise PublicationError('pr_body_verification_failed')
+    return {'pr_url': pr['html_url'], 'pr_number': pr['number'], 'pr_state': pr['state'],
+            'pr_draft': pr['draft'], 'pr_status': 'published', 'pr_error': None}
+
+
+def publish_result(config, store, record, log_dir):
+    """Publish evidence and ledger as separate durable steps; all gaps remain fenced."""
+    wi, attempt = record['wi'], record['attempt_id']
+    folder = Path(record['checkout'])
+    pending = record['pending_publication']
+    result, status = pending['result'], pending['execution_status']
+    try:
+        fields = create_pr(config, folder, record, result)
+    except PublicationError as error:
+        fields = {key: record[key] for key in ('pr_url', 'pr_number', 'pr_state', 'pr_draft')
+                  if key in record}
+        fields.update(pr_status='failed', pr_error=str(error))
+    # Persist API outcome before the second branch push. An interrupted push remains running.
+    (log_dir / 'publication.json').write_text(json.dumps(fields, indent=2) + '\n', encoding='utf-8')
+    store.patch(wi, attempt, **fields)
+    report = folder / record['result_path']
+    begin, end = '<!-- codex-pr-handoff:begin -->', '<!-- codex-pr-handoff:end -->'
+    original = report.read_text(encoding='utf-8')
+    if begin in original or end in original:
+        if (original.count(begin) != 1 or original.count(end) != 1 or
+                original.index(begin) > original.index(end) or original.split(end)[1].strip()):
+            raise RuntimeError('Ambiguous report handoff block; preserve evidence for reconciliation')
+        original = original[:original.index(begin)]
+    report.write_text(original.rstrip() + '\n\n' + begin + '\n## PR handoff\n\n```json\n' +
+                      json.dumps(fields, indent=2) + '\n```\n' + end + '\n', encoding='utf-8')
+    commit = checkpoint(folder, record['branch'], f'{wi}: record PR handoff evidence')
+    revision, state = store.read()
+    current = state['claims'][wi]
+    if current['attempt_id'] != attempt:
+        raise RuntimeError('Claim changed during PR publication')
+    if state['paused'] and state['paused']['wi'] != wi:
+        raise RuntimeError('Another work item owns the pause; reconcile publication')
+    failed = fields['pr_status'] != 'published'
+    current.update(fields, result_commit=commit, status='publication_error' if failed else status,
+                   updated_at=now())
+    if failed:
+        state['paused'] = {'wi': wi, 'reason': 'publication_error', 'since': now(),
+                           'retry': 'Explicit publish_wi after fixing PR access; never rerun Codex'}
+    elif status in RETRYABLE:
+        state['paused'] = {'wi': wi, 'reason': status, 'since': now(),
+                           'retry': 'Explicit retry_wi after execution recovery'}
+    elif state['paused'] and state['paused']['wi'] == wi:
+        state['paused'] = None
+    store.write(revision, state, f'{wi}: PR handoff {fields["pr_status"]}')
+    if failed:
+        raise PublicationError(fields['pr_error'])
+
+
+def recover_publication(config, root, store, wi):
+    """Explicit, stopped-result recovery. Does not select work or invoke Codex."""
+    _, state = store.read()
+    record = state['claims'].get(wi)
+    if not record or not record.get('pending_publication'):
+        raise RuntimeError('No durable completed result to publish; reconcile manually')
+    if state['paused'] and state['paused']['wi'] != wi:
+        raise RuntimeError('Another work item owns the pause')
+    if any(k != wi and r['status'] == 'running' for k, r in state['claims'].items()):
+        raise RuntimeError('Another running claim fences publication recovery')
+    folder = Path(record['checkout']).resolve()
+    if not folder.is_relative_to(root / 'work') or not folder.exists():
+        raise RuntimeError('Preserved checkout missing or outside work directory')
+    if git(folder, 'remote', 'get-url', 'origin').stdout.strip() != config['remote']:
+        raise RuntimeError('Unexpected recovery remote')
+    if git(folder, 'status', '--porcelain').stdout:
+        raise RuntimeError('Recovery checkout dirty; reconcile without discarding work')
+    if git(folder, 'branch', '--show-current').stdout.strip() != record['branch']:
+        raise RuntimeError('Recovery branch changed; reconcile before publication')
+    if git(folder, 'rev-parse', 'HEAD').stdout.strip() != record['result_commit']:
+        raise RuntimeError('Recovery head changed; reconcile preserved evidence')
+    remote = git(folder, 'ls-remote', 'origin', 'refs/heads/' + record['branch']).stdout.split()
+    if not remote or remote[0] != record['result_commit']:
+        raise RuntimeError('Remote result branch changed; reconcile before publication')
+    store.patch(wi, record['attempt_id'], status='running', pr_status='pending')
+    log_dir = root / 'logs' / record['attempt_id']
+    log_dir.mkdir(parents=True, exist_ok=True)
+    publish_result(config, store, record, log_dir)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', required=True)
-    parser.add_argument('--retry-wi', default='')
+    recovery = parser.add_mutually_exclusive_group()
+    recovery.add_argument('--retry-wi', default='')
+    recovery.add_argument('--publish-wi', default='')
     args = parser.parse_args()
     config = json.loads(Path(args.config).read_text(encoding='utf-8-sig'))
     root = Path(config['root']).resolve()
     if args.retry_wi and not re.fullmatch(r'WI-\d+', args.retry_wi):
         raise ValueError('Invalid retry WI')
+    if args.publish_wi and not re.fullmatch(r'WI-\d+', args.publish_wi):
+        raise ValueError('Invalid publication WI')
     with host_lock(Path(config.get('host_lock_root', str(root))).resolve()):
         store = Store(root / 'store.git', config['remote'])
+        if args.publish_wi:
+            recover_publication(config, root, store, args.publish_wi)
+            return 0
         version = run([config['codex'], '--version']).stdout.strip()
         if version != config['codex_version']:
             raise RuntimeError('Codex version changed; validate bridge before dispatch')
@@ -440,18 +607,15 @@ Return the required JSON result. Empty decision fields are allowed only for Revi
         commit = checkpoint(folder, record['branch'], f'{wi}: preserve {status} result')
         git(store.path, 'fetch', '--quiet', 'origin', 'refs/heads/' + config.get('base_branch', 'main'))
         current_main = git(store.path, 'rev-parse', 'FETCH_HEAD').stdout.strip()
-        fields = {'status': status, 'result_commit': commit, 'summary': result['summary'],
+        fields = {'status': 'running', 'result_commit': commit, 'summary': result['summary'],
                   'result_path': report.relative_to(folder).as_posix(),
-                  'review_url': f'https://github.com/{config["repository"]}/compare/{config.get('base_branch', 'main')}...{record["branch"]}',
-                  'finished_at': now(), 'base_changed_during_work': current_main != record['base_sha']}
-        fields.update(create_pr(config, folder, record, result))
-        revision, state = store.read()
-        if state['claims'][wi]['attempt_id'] != attempt:
-            raise RuntimeError('Claim changed before completion publication')
-        state['claims'][wi].update(fields, updated_at=now())
-        if status in RETRYABLE:
-            state['paused'] = {'wi': wi, 'reason': status, 'since': now(), 'retry': 'Explicit workflow_dispatch retry_wi after recovery'}
-        store.write(revision, state, f'{wi}: {status}')
+                  'review_url': f'https://github.com/{config["repository"]}/compare/{config.get("base_branch", "main")}...{record["branch"]}',
+                  'finished_at': now(), 'base_changed_during_work': current_main != record['base_sha'],
+                  'pr_status': 'pending',
+                  'pending_publication': {'result': result, 'execution_status': status}}
+        store.patch(wi, attempt, **fields)
+        record.update(fields)
+        publish_result(config, store, record, log_dir)
         print(f'{wi}: {status}; {fields["review_url"]}')
     except Exception:
         # Fail closed. Do not rewrite an uncertain published claim or delete work/logs.

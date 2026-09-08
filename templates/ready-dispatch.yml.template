@@ -14,6 +14,10 @@ __ADDITIONAL_PATHS__
         description: 'Stopped WI-NNN to retry after recovery'
         required: false
         default: ''
+      publish_wi:
+        description: 'Publish a preserved result PR only; never starts Codex'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -34,6 +38,7 @@ jobs:
         env:
           BRIDGE_TOKEN: ${{ github.token }}
           BRIDGE_RETRY_WI: ${{ inputs.retry_wi }}
+          BRIDGE_PUBLISH_WI: ${{ inputs.publish_wi }}
         run: |
           __EXPECTED_USER_CHECK__
-          & '__INVOKE_PATH__' -Config '__CONFIG_PATH__' -RetryWi $env:BRIDGE_RETRY_WI
+          & '__INVOKE_PATH__' -Config '__CONFIG_PATH__' -RetryWi $env:BRIDGE_RETRY_WI -PublishWi $env:BRIDGE_PUBLISH_WI

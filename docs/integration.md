@@ -7,3 +7,9 @@ The host owns its work items, governance, workflow trigger and results. This pub
 Use a different data directory for each host. Setup does this automatically. All installed hosts share one machine lock so one local Codex dispatch runs at a time.
 
 To update, stop or drain the runner, review and test the new checkout, then rerun setup. Existing state, logs and preserved work remain in the host installation directory.
+
+PR-based cloud orchestration uses the [generic handoff contract](coordinator-handoff.md).
+Hosts own provider configuration, event validation and authorization. Upgrade the pinned
+tool before adding `PublishWi` to a host workflow; older pins do not accept that parameter.
+Do not update a host gitlink to an unreviewed or unreachable commit. Real config stays
+outside Git and this contract does not authorize an active runner upgrade.
