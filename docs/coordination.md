@@ -64,9 +64,10 @@ uses empty feedback and reference fields plus the SHA-256 of the empty string. O
 is untrusted data and its immutable GitHub reference, digest and actor are all checked.
 
 Commands are append-only. Mutating or removing a published command fails closed. The dispatcher
-locates the commit that first introduced the command and requires GitHub to report both the exact
-associated actor login and a verified commit signature. A self-declared `issuer_actor` or unsigned
-author-email attribution is insufficient. `feedback_ref` accepts only the exact canonical
+locates the commit that first introduced the command and requires GitHub REST to report the exact
+allowlisted issuer as both the commit author and signer-associated committer, with a verified
+commit signature. A self-declared `issuer_actor`, unsigned author-email attribution, or a verified
+signature associated with a different committer is insufficient. `feedback_ref` accepts only the exact canonical
 `pullrequestreview-ID` or `issuecomment-ID` URL for the stated PR. The adapter fetches that object
 from GitHub and requires its immutable ID, URL, body and actor to match the command.
 
@@ -76,7 +77,11 @@ fields: `schema_version`, `command_id`, `status`, `command_commit`, `recorded_at
 the command/document, repository, action, WI/base/claim/task/branch/PR/head, feedback, actor/role,
 authority and result identities. The local checkout is represented only by its SHA-256 digest so
 machine paths or credentials cannot enter coordination history. Unknown, missing or mistyped
-receipt fields reject the whole document. `command_commit` is null only when rejection occurs
+receipt fields reject the whole document. Command IDs, timestamps, hashes/digests, repository,
+PR/result identities and status-dependent observations are validated on every read and write.
+Malformed untrusted strings are recorded only as null or a one-way checkout digest; accepted and
+completed receipts require the verified actor plus exact WI, claim, task, branch, PR and head
+evidence. `command_commit` is null only when rejection occurs
 before a command origin can be established; `observed.document_revision` still records the exact
 coordination document that was inspected.
 
