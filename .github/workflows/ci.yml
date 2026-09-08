@@ -51,8 +51,10 @@ jobs:
         shell: pwsh
         run: |
           git diff --check HEAD^ HEAD
-          $matches = git grep -n -I -E '(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)' -- . ':!docs/validation.md'
-          if ($LASTEXITCODE -eq 0 -and $matches) { $matches; exit 1 }
+          $credentialMatches = @(git grep -n -I -E '(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)' -- . ':!docs/validation.md' ':!.github/workflows/ci.yml')
+          $credentialExit = $LASTEXITCODE
+          if ($credentialExit -gt 1) { exit $credentialExit }
+          if ($credentialMatches.Count -gt 0) { $credentialMatches; exit 1 }
 
   workflow-validation:
     name: Workflow and template validation
