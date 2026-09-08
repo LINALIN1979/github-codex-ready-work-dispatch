@@ -41,4 +41,3 @@ claim/coordination security.
 WI-004 must be internally validated first. The closed lifecycle vocabulary and
 minimum eligibility contract are known; no live dependency is required. Ready is
 intentionally withheld until the independent CI work is suitable for review.
-

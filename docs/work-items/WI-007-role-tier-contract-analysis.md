@@ -42,4 +42,3 @@ implementation, live dispatch, host repository changes or manufactured code chan
 WI-006 must be internally validated first because its authorization binding affects
 the documented role boundary. This is a documentation/decision work item and needs no
 live dependency. Ready is intentionally withheld until WI-006 is suitable for review.
-

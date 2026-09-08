@@ -43,4 +43,3 @@ changes.
 WI-003 must be internally validated first because CI will exercise its installation
 and provenance checks. No live host or provider dependency is required. Ready is
 intentionally withheld until WI-003 is suitable for independent review.
-

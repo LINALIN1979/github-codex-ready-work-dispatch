@@ -43,4 +43,3 @@ reinterpretation of an existing enabled configuration.
 WI-005 must be internally validated first. WI-002's accepted schema and disabled
 default are fixed inputs; any enabled configuration format change requires deliberate
 version/documentation. Ready is intentionally withheld until dependency review passes.
-
