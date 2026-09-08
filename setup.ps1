@@ -10,7 +10,11 @@ param(
     [string]$ExpectedRunnerUser = '',
     [string[]]$AdditionalTriggerPath = @(),
     [string]$DataRoot = '',
-    [string]$HostLockRoot = ''
+    [string]$HostLockRoot = '',
+    [string]$CoordinationRef = '',
+    [string[]]$TrustedCoordinatorActor = @(),
+    [string[]]$TrustedCoordinatorRole = @(),
+    [string]$CoordinationAuthorityRef = ''
 )
 $ErrorActionPreference = 'Stop'
 $source = $PSScriptRoot
@@ -54,6 +58,16 @@ $codexVersion = (& $Codex --version).Trim()
 if ($LASTEXITCode -ne 0) { throw 'Codex version check failed.' }
 $pythonVersion = (& $Python --version).Trim()
 if ($LASTEXITCode -ne 0) { throw 'Python version check failed.' }
+if ($CoordinationRef) {
+    if ($CoordinationRef -notmatch '^refs/heads/codex/[A-Za-z0-9._/-]+$' -or $CoordinationRef -eq 'refs/heads/codex/dispatch-state') {
+        throw 'CoordinationRef must be a dedicated refs/heads/codex/* branch.'
+    }
+    if (-not $TrustedCoordinatorActor -or -not $TrustedCoordinatorRole -or -not $CoordinationAuthorityRef) {
+        throw 'CoordinationRef requires trusted actors, trusted roles and CoordinationAuthorityRef.'
+    }
+} elseif ($TrustedCoordinatorActor -or $TrustedCoordinatorRole -or $CoordinationAuthorityRef) {
+    throw 'Coordination trust settings require CoordinationRef.'
+}
 $config = [ordered]@{
     repository = $repository
     remote = $remote
@@ -64,6 +78,10 @@ $config = [ordered]@{
     codex = (Resolve-Path -LiteralPath $Codex).Path
     codex_version = $codexVersion
     python = (Resolve-Path -LiteralPath $Python).Path
+    coordination_ref = $CoordinationRef
+    trusted_coordination_actors = @($TrustedCoordinatorActor)
+    trusted_coordination_roles = @($TrustedCoordinatorRole)
+    coordination_authority_ref = $CoordinationAuthorityRef
     task_seconds = 2700
     batch_seconds = 14400
     max_items = 10

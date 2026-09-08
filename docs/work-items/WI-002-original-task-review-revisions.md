@@ -1,6 +1,6 @@
 # WI-002 — Resume original task for authorized review revisions
 
-Status: Ready
+Status: Review
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -67,5 +67,13 @@ credential scan and `git diff --check`. No live runner or host work item executi
 
 ## Results / evidence links
 
-Not started. Ready for bounded implementation; no host activation or live deployment is
-authorized.
+Bounded implementation completed and submitted for independent Review. The adapter is disabled
+by default and requires an explicit command ID plus a fully configured dedicated ref, trusted
+actor/role and authority reference. It verifies the immutable command-origin GitHub actor,
+closed schema/digest, exact base/WI/claim/task/checkout/branch/Draft-PR/head identities and a
+clean stopped checkout before publishing an at-most-once CAS receipt and resuming the original
+task. Duplicate or interrupted commands do not replay; failures preserve sanitized evidence.
+
+Evidence: `docs/validation.md` (WI-002 section), `test_coordination.py`, rendered setup/workflow
+fixture, PowerShell/Python/JSON/actionlint checks and the full offline test suite. No live host,
+provider command, runner upgrade, merge, lifecycle approval or project code was exercised.

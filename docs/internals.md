@@ -22,3 +22,8 @@ git show FETCH_HEAD:state.json
 ```
 
 Do not delete, force-push or manually edit claim state during ordinary recovery.
+
+Coordinator commands and receipts do not live in this state branch. When explicitly configured,
+they use the separate host-owned ref and schema described in [coordination.md](coordination.md).
+The dispatcher uses another bare local store and non-force CAS so command receipts cannot become
+WI lifecycle or claim authority.
