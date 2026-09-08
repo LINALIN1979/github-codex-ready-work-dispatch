@@ -1,6 +1,6 @@
 # WI-004 — Independent GitHub-hosted CI
 
-Status: Planned
+Status: Ready
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -41,5 +41,11 @@ changes.
 ## Dependencies and Ready gate
 
 WI-003 must be internally validated first because CI will exercise its installation
-and provenance checks. No live host or provider dependency is required. Ready is
-intentionally withheld until WI-003 is suitable for independent review.
+and provenance checks. No live host or provider dependency is required. WI-003 is
+internally validated and suitable for independent review on Draft PR #5; the
+dependency gate is satisfied for this focused branch.
+
+## Validation / evidence
+
+Pending the implementation checks recorded in `docs/validation.md`. No GitHub-hosted
+runner, provider or host repository mutation is required to implement this item.
