@@ -1,6 +1,6 @@
 # WI-005 — Safe work-item creation and explicit Ready authorization
 
-Status: Ready
+Status: Review
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
