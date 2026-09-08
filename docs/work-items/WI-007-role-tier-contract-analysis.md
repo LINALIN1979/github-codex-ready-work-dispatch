@@ -1,6 +1,6 @@
 # WI-007 — Dispatcher role/tier contract analysis
 
-Status: Ready
+Status: Review
 Work Type: Documentation
 Owner Role: Docs / Traceability
 Capability Tier: T2 Standard
