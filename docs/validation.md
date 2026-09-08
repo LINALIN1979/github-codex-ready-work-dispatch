@@ -22,6 +22,22 @@ The source-without-Git policy is explicit: setup fails closed. No host repositor
 runner, provider, live Codex, claim, log, recovery checkout, config, or coordination
 state was modified. The WI remains Review pending independent review.
 
+## WI-004 independent GitHub-hosted CI — 2026-09-09
+
+Base is the internally validated WI-003 branch; focused checkpoint `43d2de4` plus
+the YAML quoting correction in the current Review branch. The new `.github/workflows/ci.yml`
+uses only GitHub-hosted Ubuntu/Windows runners, read-only contents permission, no secrets,
+Codex, SSH, coordination commands or repository writes. It covers Python 3.10/3.14 full
+suite, PowerShell AST, Python 3.10 grammar, credential/diff checks, PyYAML 6.0.3
+workflow/template validation and actionlint v1.7.7.
+
+The full local suite passed: **37 tests in 94.815 seconds**. Python 3.10 AST,
+PowerShell AST, `git diff --check`, credential scan and isolated `ci/validate_yaml.py`
+passed. GitHub-hosted matrix execution and actionlint are pending the Draft PR CI run.
+Documentation distinguishes real local/disposable behavior from simulated GitHub/Codex/
+provider behavior and unproven live host behavior. No host repository or live runner was
+modified. WI-004 remains Review.
+
 ## WI-002 original-task review revisions — 2026-09-08
 
 Baseline remote main: `a9f2673250f73a1cf567b5e5204f16f2ddaede0c`. The accepted ADR-001

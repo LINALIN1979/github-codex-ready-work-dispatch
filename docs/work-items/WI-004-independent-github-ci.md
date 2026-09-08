@@ -47,5 +47,20 @@ dependency gate is satisfied for this focused branch.
 
 ## Validation / evidence
 
-Pending the implementation checks recorded in `docs/validation.md`. No GitHub-hosted
-runner, provider or host repository mutation is required to implement this item.
+`python -m unittest discover -s . -p 'test_*.py' -v`: 37 tests passed in 94.815
+seconds. Python 3.10 AST, PowerShell AST, `git diff --check` and credential-pattern
+checks passed. With isolated PyYAML 6.0.3, `python ci/validate_yaml.py` passed for the
+CI workflow and rendered dispatcher template. actionlint and the matrix execution on
+GitHub-hosted runners remain pending the Draft PR CI run. No host repository, runner,
+provider or secret was used.
+
+## Results / evidence links
+
+`.github/workflows/ci.yml` uses only GitHub-hosted `ubuntu-latest` and `windows-latest`
+runners with `contents: read`. It runs the complete Python suite on 3.10/3.14,
+PowerShell and static checks, PyYAML workflow/template validation and actionlint from
+the pinned v1.7.7 module. `docs/ci.md` records what is real, disposable, simulated or
+unproven. Third-party actions are pinned to immutable commit SHAs; no Codex execution,
+coordination command, SSH key, secret or repository write is configured.
+
+Out-of-scope changes: None. The work item remains Review and is not Done.
