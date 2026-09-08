@@ -14,6 +14,7 @@ param(
     [string]$CoordinationRef = '',
     [string[]]$TrustedCoordinatorActor = @(),
     [string[]]$TrustedCoordinatorRole = @(),
+    [string[]]$TrustedCoordinatorBinding = @(),
     [string]$CoordinationAuthorityRef = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -85,10 +86,33 @@ if ($CoordinationRef) {
     if ($CoordinationRef -notmatch '^refs/heads/codex/[A-Za-z0-9._/-]+$' -or $CoordinationRef -eq 'refs/heads/codex/dispatch-state') {
         throw 'CoordinationRef must be a dedicated refs/heads/codex/* branch.'
     }
-    if (-not $TrustedCoordinatorActor -or -not $TrustedCoordinatorRole -or -not $CoordinationAuthorityRef) {
+    if (-not $CoordinationAuthorityRef) {
         throw 'CoordinationRef requires trusted actors, trusted roles and CoordinationAuthorityRef.'
     }
+    $principals = @()
+    if ($TrustedCoordinatorBinding) {
+        if ($TrustedCoordinatorActor -or $TrustedCoordinatorRole) {
+            throw 'Use TrustedCoordinatorBinding or legacy actor/role arrays, not both.'
+        }
+        foreach ($binding in $TrustedCoordinatorBinding) {
+            if ($binding -notmatch '^(?<actor>[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)=(?<role>[^\r\n]{1,100})$') {
+                throw 'TrustedCoordinatorBinding must look like actor=role.'
+            }
+            $principals += [ordered]@{ actor = $Matches.actor; roles = @($Matches.role.Trim()) }
+        }
+    } else {
+        if (-not $TrustedCoordinatorActor -or -not $TrustedCoordinatorRole) {
+            throw 'CoordinationRef requires trusted actors, trusted roles and CoordinationAuthorityRef.'
+        }
+        if (@($TrustedCoordinatorActor).Count -ne 1 -or @($TrustedCoordinatorRole).Count -ne 1) {
+            throw 'Multiple legacy actors or roles are ambiguous; use TrustedCoordinatorBinding.'
+        }
+        $principals = @([ordered]@{ actor = $TrustedCoordinatorActor[0]; roles = @($TrustedCoordinatorRole[0]) })
+    }
+    if (-not $principals) { throw 'CoordinationRef requires at least one actor-role binding.' }
 } elseif ($TrustedCoordinatorActor -or $TrustedCoordinatorRole -or $CoordinationAuthorityRef) {
+    throw 'Coordination trust settings require CoordinationRef.'
+} elseif ($TrustedCoordinatorBinding) {
     throw 'Coordination trust settings require CoordinationRef.'
 }
 $config = [ordered]@{
@@ -104,6 +128,7 @@ $config = [ordered]@{
     coordination_ref = $CoordinationRef
     trusted_coordination_actors = @($TrustedCoordinatorActor)
     trusted_coordination_roles = @($TrustedCoordinatorRole)
+    trusted_coordination_principals = @($principals)
     coordination_authority_ref = $CoordinationAuthorityRef
     task_seconds = 2700
     batch_seconds = 14400

@@ -50,6 +50,22 @@ manual Ready support are covered. The complete suite and static checks will be r
 at the branch checkpoint. No host repository, live dispatcher, claims, runner or
 provider was used. WI-005 remains Review.
 
+## WI-006 coordinator actor-role authorization binding — 2026-09-09
+
+WI-005 is internally validated on Draft PR #7. The former independent actor and role
+allowlists were confirmed to authorize their Cartesian product. The fix adds explicit
+`trusted_coordination_principals` actor→roles mappings, rejects malformed/conflicting
+configuration, and deliberately supports legacy configuration only for one actor plus
+one role. Setup's repeated `actor=role` binding input and migration documentation are
+included.
+
+`python -m unittest test_actor_role_binding -v`: **3 tests passed**. Tests cover two
+actors/two roles with authorized and cross-pair/forged-role outcomes, disabled-default
+compatibility and legacy single-principal migration versus ambiguous legacy rejection.
+The complete WI-002 coordination suite and static checks are being rerun before this
+branch checkpoint. No live coordination command, host, provider, runner or PR-comment
+execution occurred. WI-006 remains Review.
+
 ## WI-002 original-task review revisions — 2026-09-08
 
 Baseline remote main: `a9f2673250f73a1cf567b5e5204f16f2ddaede0c`. The accepted ADR-001

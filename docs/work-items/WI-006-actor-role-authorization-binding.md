@@ -1,6 +1,6 @@
 # WI-006 — Coordinator actor-role authorization binding
 
-Status: Planned
+Status: Ready
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -42,4 +42,24 @@ reinterpretation of an existing enabled configuration.
 
 WI-005 must be internally validated first. WI-002's accepted schema and disabled
 default are fixed inputs; any enabled configuration format change requires deliberate
-version/documentation. Ready is intentionally withheld until dependency review passes.
+version/documentation. WI-005 is internally validated and suitable for independent
+review on Draft PR #7; the dependency gate is satisfied for this focused branch.
+
+## Validation / evidence
+
+Focused `python -m unittest test_actor_role_binding -v`: 3 tests passed. The complete
+suite and static checks are recorded in `docs/validation.md`.
+
+## Results / evidence links
+
+The prior Cartesian-product behavior was confirmed. `trusted_coordination_principals`
+now provides a closed actor-to-role mapping. Legacy enabled configurations remain
+supported only for exactly one actor and one role; ambiguous multi-actor/multi-role
+legacy settings fail closed. Setup accepts repeated `actor=role` bindings and emits
+the explicit mapping. Command data still cannot create authority: authentication is
+verified separately against the signed GitHub commit actor, then the actor-role pair
+is checked before feedback/context validation and durable acceptance.
+
+Out-of-scope changes: None. Disabled coordination, WI-002 schemas, receipts, exact
+identity checks, same-task resume and replay fences remain in scope and covered. This
+work item is Review and is not Done.
