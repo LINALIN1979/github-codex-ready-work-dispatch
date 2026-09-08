@@ -1,5 +1,27 @@
 # Validation — 2026-09-07
 
+## WI-003 source and installation integrity — 2026-09-09
+
+Baseline remote `main`: `1886a4268c9f2e5cf5e917372174c19cb89ba7d5`; focused branch
+checkpoint: `24d9028`. The suspected setup provenance issue was confirmed: the prior
+script recorded `git rev-parse HEAD` while copying potentially dirty executable and
+template sources. The fix is fail-closed and covers `setup.ps1`, `bridge.py`,
+`invoke-dispatch.ps1` and `templates/ready-dispatch.yml.template` before any install or
+host workflow write. It records their SHA-256 hashes alongside the reviewed revision.
+
+`python -m unittest test_installation -v`: **3 tests passed**. The complete suite
+`python -m unittest discover -s . -p 'test_*.py' -v`: **37 tests passed** in 98.137
+seconds on Windows / Python 3.14.6. Fixtures cover clean reviewed source, harmless
+untracked files, dirty material-source rejection before host mutation, installed hash
+tamper detection and clean pinned-submodule invocation. Python 3.10 AST and PowerShell
+AST parsing, `git diff --check` and credential-pattern scan passed. Local YAML parser and
+actionlint binaries were unavailable; no workflow/template content changed, and WI-004
+will provide independent GitHub-hosted CI coverage.
+
+The source-without-Git policy is explicit: setup fails closed. No host repository,
+runner, provider, live Codex, claim, log, recovery checkout, config, or coordination
+state was modified. The WI remains Review pending independent review.
+
 ## WI-002 original-task review revisions — 2026-09-08
 
 Baseline remote main: `a9f2673250f73a1cf567b5e5204f16f2ddaede0c`. The accepted ADR-001
