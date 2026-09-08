@@ -119,11 +119,12 @@ result evidence; repair with `-PublishWi WI-NNN` (or workflow `publish_wi`) with
 rerunning Codex. See the [coordinator handoff contract](docs/coordinator-handoff.md) for
 GitHub settings, durable state, event integration and authority boundaries.
 
-Coordinator-directed ordinary review revisions are not implemented. The accepted
-[revision-command ADR](docs/decisions/ADR-001-coordinator-revision-commands.md) and
-[WI-002](docs/work-items/WI-002-original-task-review-revisions.md) define a Ready,
-disabled-by-default path that would resume the original saved task without executing PR
-comments directly.
+Coordinator-directed ordinary review revisions are implemented as a disabled-by-default,
+explicit command adapter. The accepted [revision-command ADR](docs/decisions/ADR-001-coordinator-revision-commands.md),
+[WI-002](docs/work-items/WI-002-original-task-review-revisions.md) and
+[operator contract](docs/coordination.md) define its trust, identity, CAS and recovery boundaries.
+It resumes the original saved task and never executes PR comments directly. A host must review,
+configure and explicitly invoke the adapter before it can do anything.
 
 Quota, timeout and execution failures preserve the checkout and pause further dispatch. After fixing the technical problem, retry from **Actions → Codex Ready work dispatcher → Run workflow**, entering the same `WI-NNN`. Product or approval blockers require a new decision, not a technical retry.
 
@@ -154,5 +155,7 @@ Disable the GitHub workflow or stop the runner. Keep the local data directory an
 - `templates/ready-dispatch.yml.template` — workflow installed by setup.
 - `config.example.json` — configuration reference; real config stays local.
 - `test_bridge.py` — offline tests using temporary Git remotes and fake Codex output.
+- `test_coordination.py` — command schema, identity, CAS receipt and exact-resume tests.
+- `docs/coordination.md` — optional original-task revision operator contract.
 
 No third-party Python package is required.

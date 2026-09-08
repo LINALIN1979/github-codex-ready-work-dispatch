@@ -18,6 +18,10 @@ __ADDITIONAL_PATHS__
         description: 'Publish a preserved result PR only; never starts Codex'
         required: false
         default: ''
+      coordination_command:
+        description: 'Explicit trusted command ID; disabled unless host config opts in'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -39,6 +43,7 @@ jobs:
           BRIDGE_TOKEN: ${{ github.token }}
           BRIDGE_RETRY_WI: ${{ inputs.retry_wi }}
           BRIDGE_PUBLISH_WI: ${{ inputs.publish_wi }}
+          BRIDGE_COORDINATION_COMMAND: ${{ inputs.coordination_command }}
         run: |
           __EXPECTED_USER_CHECK__
-          & '__INVOKE_PATH__' -Config '__CONFIG_PATH__' -RetryWi $env:BRIDGE_RETRY_WI -PublishWi $env:BRIDGE_PUBLISH_WI
+          & '__INVOKE_PATH__' -Config '__CONFIG_PATH__' -RetryWi $env:BRIDGE_RETRY_WI -PublishWi $env:BRIDGE_PUBLISH_WI -CoordinationCommand $env:BRIDGE_COORDINATION_COMMAND

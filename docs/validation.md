@@ -1,5 +1,39 @@
 # Validation — 2026-09-07
 
+## WI-002 original-task review revisions — 2026-09-08
+
+Baseline remote main: `a9f2673250f73a1cf567b5e5204f16f2ddaede0c`. The accepted ADR-001
+and Ready work item were integrated before implementation. The work branch changes WI-002 to
+Review; host activation and live deployment remain out of scope.
+
+`python -B -m unittest discover -s . -p "test_*.py" -v`: **34 tests passed** on Windows /
+Python 3.14.6. Fifteen WI-002 tests cover the closed command and receipt schemas, verified commit
+author/committer/signature binding, exact GitHub feedback identity/body/actor, the PR-zero-only
+empty technical-retry exception, durable sanitized rejection receipts,
+exact identity/stale-head/changed-WI/dirty-checkout fencing, preservation of the same task/branch/PR,
+exact resume and PR-bearing technical-retry invocation, command-origin immutability, real Git CAS
+accepted/completed/rejected persistence, duplicate receipts and interrupted-command no-replay.
+They also exercise the real technical-retry `run_one` boundary and prove a mismatched resumed
+task ID is rejected without replacing the saved claim identity.
+The 19 pre-existing tests continue to cover
+Ready dispatch, technical retries, real Git claim CAS, result publication/recovery, PR identity
+conflicts, token failures and host locking.
+
+Additional checks passed:
+
+- Python sources parse with the Python 3.10 AST grammar; JSON configuration parses.
+- PowerShell AST accepts `setup.ps1` and `invoke-dispatch.ps1`.
+- `setup.ps1` generated an opted-in disposable host config and workflow, installed hash-checked
+  files and passed `-ValidateOnly`; a legacy config without coordination keys also passed.
+- Disabled-by-default invocation rejected `-CoordinationCommand` before starting Codex.
+- Actionlint 1.7.12 accepted the rendered workflow with only its known disposable custom runner
+  label excluded from the built-in-label check.
+- `git diff --check`, Markdown link, credential-pattern and scope checks passed.
+
+All Git remotes, checkouts and coordination CAS writes in tests are disposable local fixtures;
+GitHub/Codex identities and model execution are fake. No live runner, provider event, host
+coordination branch, repository merge, credential/configuration change or game work occurred.
+
 ## WI-001 reliable PR handoff — 2026-09-08
 
 Baseline remote main: `8f3ff77a61009a7e5651208c7b4b8a2257230dae`; clean fresh clone and

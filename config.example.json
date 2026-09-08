@@ -10,5 +10,9 @@
   "host_lock_root": "C:/dispatch/host-lock",
   "base_branch": "main",
   "work_items_path": "docs/work-items",
-  "python": "C:/path/to/python.exe"
+  "python": "C:/path/to/python.exe",
+  "coordination_ref": "",
+  "trusted_coordination_actors": [],
+  "trusted_coordination_roles": [],
+  "coordination_authority_ref": ""
 }

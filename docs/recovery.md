@@ -41,6 +41,15 @@ Ready work, buys credits or changes approved requirements. The checkout must be 
 inside its saved data root, on the recorded branch, and match both the durable result
 commit and remote branch. Unrelated running claims/pauses block recovery.
 
+## Coordinator-command recovery
+
+An accepted coordination receipt is an at-most-once fence. Never delete it or replay the same
+command ID after a crash. Inspect the command receipt, dispatch claim, saved task, checkout and
+local logs. If execution may have started, prove it stopped before any new authorization. A new
+command ID is required for another attempt and must reference the then-current exact identities.
+See [coordination.md](coordination.md). This recovery never creates a replacement task or clears
+an uncertain claim automatically.
+
 A crash after a branch push but before ledger completion can leave different heads.
 Preserve files and reconcile exact branch/report/PR evidence through authorized CAS;
 do not reset, discard or simply change the expected SHA to make a check pass. Legacy

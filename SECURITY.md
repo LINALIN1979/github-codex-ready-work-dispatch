@@ -16,3 +16,11 @@ and gitlinks as trusted executable dependencies. Do not globally enable the Git 
 Public source visibility does not make a host safe to dispatch. Trust and authorization come
 from the host repository, its access control and each Ready work item.
 Disable the workflow/stop the runner to suspend dispatch; retain claims and recovery files.
+
+Coordinator commands are disabled unless a dedicated ref, trusted GitHub actors, trusted roles
+and an exact host authority reference are configured together. The introducing commit must have
+a GitHub-verified signature and its associated actor must match the allowlisted issuer. Referenced
+review/comment IDs, bodies and actors are independently fetched and matched; command text remains
+untrusted. Accepted and rejected closed-schema receipts are durable at-most-once fences, contain
+only sanitized identity evidence, and must not be removed to retry uncertain execution. See
+`docs/coordination.md`.

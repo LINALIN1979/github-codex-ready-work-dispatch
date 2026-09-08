@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Config,
     [string]$RetryWi = '',
     [string]$PublishWi = '',
+    [string]$CoordinationCommand = '',
     [switch]$ValidateOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -30,8 +31,22 @@ if (Test-Path -LiteralPath $manifestPath) {
 if (-not (Test-Path -LiteralPath $Config)) { throw "Missing config: $Config" }
 if ($RetryWi -and $RetryWi -notmatch '^WI-\d+$') { throw 'RetryWi must look like WI-012.' }
 if ($PublishWi -and $PublishWi -notmatch '^WI-\d+$') { throw 'PublishWi must look like WI-012.' }
-if ($RetryWi -and $PublishWi) { throw 'Choose RetryWi or PublishWi, never both.' }
+if ($CoordinationCommand -and $CoordinationCommand -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') { throw 'Invalid CoordinationCommand.' }
+if (@($RetryWi, $PublishWi, $CoordinationCommand).Where({ $_ }).Count -gt 1) {
+    throw 'Choose RetryWi, PublishWi or CoordinationCommand, never more than one.'
+}
 $settings = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
+$coordinationEnabled = [bool]$settings.coordination_ref
+if ($coordinationEnabled) {
+    if ($settings.coordination_ref -notmatch '^refs/heads/codex/[A-Za-z0-9._/-]+$' -or
+        $settings.coordination_ref -eq 'refs/heads/codex/dispatch-state' -or
+        -not $settings.trusted_coordination_actors -or -not $settings.trusted_coordination_roles -or
+        -not $settings.coordination_authority_ref) {
+        throw 'Coordination configuration is incomplete or unsafe.'
+    }
+} elseif ($CoordinationCommand) {
+    throw 'Coordination commands are disabled in this host config.'
+}
 if ($ValidateOnly) {
     & $settings.codex --version
     if ($LASTEXITCODE -ne 0) { throw 'Codex version check failed.' }
@@ -41,5 +56,6 @@ if ($ValidateOnly) {
 $arguments = @((Join-Path $installDirectory 'bridge.py'), '--config', $Config)
 if ($RetryWi) { $arguments += @('--retry-wi', $RetryWi) }
 if ($PublishWi) { $arguments += @('--publish-wi', $PublishWi) }
+if ($CoordinationCommand) { $arguments += @('--coordination-command', $CoordinationCommand) }
 & $settings.python @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Dispatch stopped. Claims and local recovery files were preserved.' }
