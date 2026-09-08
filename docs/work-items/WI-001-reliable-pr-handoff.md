@@ -1,6 +1,6 @@
 # WI-001 — Reliable Draft PR and coordinator handoff
 
-Status: Review
+Status: Done
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -58,10 +58,17 @@ PowerShell AST parse, workflow YAML/actionlint and scope/security/diff checks.
 
 ## Results / evidence links
 
-Ready checkpoint: `9caa9a0`; then In Progress during implementation, now Review.
+Ready checkpoint: `9caa9a0`; then In Progress and Review during implementation.
+Owner review completed on 2026-09-08 and authorized this review branch for merge.
 Nineteen offline tests passed in 114.829 seconds, including real temporary Git remotes,
 failed handoff recovery and an interrupted evidence push. PowerShell/YAML/actionlint,
 isolated setup/hash validation, Python 3.10 grammar and scope/diff checks passed.
 See `docs/validation.md` for evidence and `docs/coordinator-handoff.md` for the contract.
 External provider delivery is host-owned validation, not proven by fake GitHub API tests.
-Out-of-scope changes: None. No merge, active installation change or live cutover.
+Out-of-scope changes: None. Merge is authorized separately; no active installation change
+or live cutover is part of this work item.
+
+## Completion notes
+
+Owner review is complete. The reliable Draft PR publication and recovery implementation
+is accepted for merge. Host activation and live runner cutover remain host-owned work.
