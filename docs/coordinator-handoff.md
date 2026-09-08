@@ -4,8 +4,8 @@ Owner-authorized scope: [WI-001](work-items/WI-001-reliable-pr-handoff.md).
 
 Future two-way review revisions are intentionally outside this v1 contract. See
 [ADR-001](decisions/ADR-001-coordinator-revision-commands.md) and
-[WI-002](work-items/WI-002-original-task-review-revisions.md), both Proposed/Planned and
-non-executable until separately accepted and authorized.
+[WI-002](work-items/WI-002-original-task-review-revisions.md), now Accepted/Ready for bounded
+reusable implementation but not host activation or live deployment.
 
 ## Ownership and transport
 

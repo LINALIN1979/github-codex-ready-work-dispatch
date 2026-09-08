@@ -1,14 +1,15 @@
 # WI-002 — Resume original task for authorized review revisions
 
-Status: Planned
+Status: Ready
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
 
 ## Authorization and linked source of truth
 
-Planned from the repository Owner's 2026-09-08 request for a coordinator-managed review
-loop that reuses the original Codex Developer task. References: ADR-001 (Proposed),
+Authorized by the repository Owner's 2026-09-08 request for a coordinator-managed review
+loop that reuses the original Codex Developer task. The Technical Owner accepted ADR-001
+on 2026-09-08. References: ADR-001 (Accepted),
 `docs/coordinator-handoff.md`, `docs/internals.md`, `docs/recovery.md` and SECURITY.md.
 
 ## Goal
@@ -49,8 +50,14 @@ upgrade, secret storage or game/project code.
 
 ## Dependencies
 
-ADR-001 Accepted; explicit Owner authorization of the final command schema and security
-boundary. No live host/provider is required for offline implementation.
+ADR-001 Accepted and explicit Owner authorization of the command schema/security boundary.
+No live host/provider is required for offline implementation.
+
+## Ready gate
+
+Goal, scope, closed acceptance criteria, role, capability and offline evidence are defined.
+ADR-001 is Accepted; implementation is disabled by default and requires no live dependency.
+No unresolved Owner decision blocks this bounded reusable implementation. Ready gate met.
 
 ## Validation / evidence
 
@@ -60,5 +67,5 @@ credential scan and `git diff --check`. No live runner or host work item executi
 
 ## Results / evidence links
 
-Not started. Planned; not an eligible dispatcher candidate.
-
+Not started. Ready for bounded implementation; no host activation or live deployment is
+authorized.

@@ -1,6 +1,6 @@
 # ADR-001 — Coordinator revision-command boundary
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-08
 
 ## Context
@@ -14,7 +14,7 @@ PR comments and event payloads are untrusted and cannot safely become local exec
 instructions. The host's `codex/dispatch-state` is already limited to execution facts and
 must not become coordinator authority or lifecycle state.
 
-## Proposed decision
+## Decision
 
 Add an optional, disabled-by-default revision-command adapter with these boundaries:
 
@@ -54,6 +54,5 @@ validation. This reusable repository owns schema validation, exact identity chec
 original-task resume, receipts and offline tests. Existing hosts are unchanged until they
 pin a reviewed implementation and explicitly configure/invoke the adapter.
 
-This proposal grants no host coordinator write access, approval authority, merge authority
-or live deployment. Acceptance requires Technical Owner review.
-
+The Technical Owner accepted this decision on 2026-09-08. It grants no host coordinator
+write access, approval authority, merge authority or live deployment by itself.
