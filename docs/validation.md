@@ -39,7 +39,9 @@ matched its own workflow file, and temporary-path normalization differed between
 `Path.resolve()` and an unresolved `Path`. The current branch fixes both without
 weakening the checks: the scanner excludes only its own workflow and preserves the
 nonzero-error handling, while all work-root containment comparisons normalize both
-operands. A corrected GitHub-hosted run is required before this evidence is complete.
+operands. The corrected local suite now passes **37 tests in 102.987 seconds**, including
+the short-path resume regression exposed by the hosted runner. A corrected GitHub-hosted
+run is required before this evidence is complete.
 Documentation distinguishes real local/disposable behavior from simulated GitHub/Codex/
 provider behavior and unproven live host behavior. No host repository or live runner was
 modified. WI-004 remains Review.
