@@ -29,7 +29,7 @@ Only trusted base-branch writers should be able to trigger this runner. Read [SE
 
 2. In the host repository, open **Settings → Actions → Runners → New self-hosted runner**. Register the runner using GitHub's commands and add a project-specific label.
 
-3. Run setup from this repository:
+3. Run setup from a reviewed, clean Git checkout of this repository:
 
 ```powershell
 .\setup.ps1 `
@@ -56,9 +56,16 @@ git -C D:\repos\my-project push
 
 Setup does not register the runner automatically because GitHub supplies a short-lived registration token to the repository owner.
 
+Setup is fail-closed for source provenance. It requires the dispatcher source to be the
+repository root with a resolvable Git `HEAD`, and rejects local changes in `setup.ps1`,
+`bridge.py`, `invoke-dispatch.ps1` or `templates/ready-dispatch.yml.template`. The install
+manifest records the reviewed Git revision and SHA-256 hashes for those material sources,
+as well as the installed executable hashes. A non-Git source directory is not considered
+verified and cannot be installed.
+
 ## Pinned submodule integration
 
-A host may pin this public repository as a Git submodule and call `invoke-dispatch.ps1` directly. Keep the real host configuration outside Git and pass its absolute local path with `-Config`. The invocation fails closed when the configuration is missing or the executable files in the submodule have local changes.
+A host may pin this public repository as a Git submodule and call `invoke-dispatch.ps1` directly. Keep the real host configuration outside Git and pass its absolute local path with `-Config`. The invocation fails closed when the configuration is missing or the executable files in the submodule have local changes. Pinned-submodule execution does not use the setup manifest; it requires a clean executable checkout and validates the checked-out Git revision.
 
 ## Create a Ready work item — about 2 minutes
 

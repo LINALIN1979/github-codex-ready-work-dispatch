@@ -11,6 +11,11 @@ $manifestPath = Join-Path $installDirectory 'install-manifest.json'
 $dispatcherVersion = $null
 if (Test-Path -LiteralPath $manifestPath) {
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    if (-not $manifest.version -or $manifest.version -notmatch '^[0-9a-f]{40}$' -or
+        -not $manifest.source_provenance -or
+        $manifest.source_provenance.git_revision -ne $manifest.version) {
+        throw 'Installed dispatcher provenance manifest is missing or invalid. Run setup.ps1 again.'
+    }
     foreach ($entry in $manifest.files.PSObject.Properties) {
         $file = Join-Path $installDirectory $entry.Name
         if (-not (Test-Path -LiteralPath $file)) { throw "Missing installed file: $($entry.Name)" }

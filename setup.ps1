@@ -18,6 +18,27 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $source = $PSScriptRoot
+$provenancePaths = @('setup.ps1', 'bridge.py', 'invoke-dispatch.ps1', 'templates/ready-dispatch.yml.template')
+$sourceRoot = (& git -C $source rev-parse --show-toplevel 2>$null).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $sourceRoot) { throw 'Dispatcher source must be a Git working tree.' }
+$sourceRoot = (Resolve-Path -LiteralPath $sourceRoot).Path
+$sourcePath = (Resolve-Path -LiteralPath $source).Path
+if ($sourceRoot -ne $sourcePath) { throw 'Dispatcher setup must run from the repository root.' }
+$version = (& git -C $source rev-parse --verify HEAD 2>$null).Trim()
+if ($LASTEXITCODE -ne 0 -or $version -notmatch '^[0-9a-f]{40}$') { throw 'Cannot determine reviewed dispatcher Git version.' }
+$sourceStatus = @(& git -C $source status --porcelain=v1 --untracked-files=all -- $provenancePaths)
+if ($LASTEXITCODE -ne 0) { throw 'Cannot verify dispatcher source status.' }
+if ($sourceStatus.Count -gt 0 -and $sourceStatus[0]) {
+    throw ('Dispatcher source has local changes in material files: ' + ($sourceStatus -join '; '))
+}
+$sourceHashes = [ordered]@{}
+foreach ($path in $provenancePaths) {
+    $tracked = (& git -C $source ls-files --error-unmatch -- $path 2>$null).Trim()
+    if ($LASTEXITCODE -ne 0 -or $tracked -ne $path) { throw "Material source is not tracked: $path" }
+    $fullPath = Join-Path $source $path
+    if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { throw "Missing material source: $path" }
+    $sourceHashes[$path] = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash
+}
 $hostPath = (Resolve-Path -LiteralPath $HostRepo).Path
 if (-not (Test-Path -LiteralPath (Join-Path $hostPath '.git'))) { throw 'HostRepo must be a Git working tree root.' }
 $remote = (& git -C $hostPath remote get-url origin).Trim()
@@ -28,15 +49,17 @@ $installDirectory = Join-Path $InstallRoot $repositorySlug
 $dataDirectory = if ($DataRoot) { $DataRoot } else { Join-Path $installDirectory 'data' }
 $lockDirectory = if ($HostLockRoot) { $HostLockRoot } else { Join-Path $InstallRoot 'host-lock' }
 New-Item -ItemType Directory -Force -Path $installDirectory, $dataDirectory | Out-Null
-$version = (& git -C $source rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0) { $version = 'source-without-git-version' }
 Copy-Item -LiteralPath (Join-Path $source 'bridge.py') -Destination $installDirectory -Force
 Copy-Item -LiteralPath (Join-Path $source 'invoke-dispatch.ps1') -Destination $installDirectory -Force
 $files = @{}
 foreach ($name in @('bridge.py', 'invoke-dispatch.ps1')) {
     $files[$name] = (Get-FileHash -LiteralPath (Join-Path $installDirectory $name) -Algorithm SHA256).Hash
 }
-$manifest = @{ version = $version; files = $files }
+$manifest = [ordered]@{
+    version = $version
+    source_provenance = [ordered]@{ git_revision = $version; files = $sourceHashes }
+    files = $files
+}
 $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $installDirectory 'install-manifest.json') -Encoding utf8
 if (-not $Codex) {
     $codexCommand = Get-Command codex.exe -ErrorAction SilentlyContinue | Select-Object -First 1

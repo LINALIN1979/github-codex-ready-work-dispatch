@@ -3,7 +3,11 @@
 Run only for trusted, access-controlled host repositories and trusted base-branch writers.
 Do not trigger a desktop runner from untrusted pull requests/forks. A runner has the desktop
 user's tools and SSH identity. This is not a VM or isolation between mutually untrusted hosts.
-Use `setup.ps1` from a reviewed dispatcher checkout. It installs a hash-checked local copy;
+Use `setup.ps1` from a reviewed, clean Git-root dispatcher checkout. Setup verifies the
+material source set (`setup.ps1`, `bridge.py`, `invoke-dispatch.ps1` and the workflow
+template) before any host/install write, rejects tracked or untracked changes in that set,
+and records their hashes with the reviewed Git revision. Non-Git source fails closed. It
+installs a hash-checked local copy;
 never use workflow or pull-request code as privileged runner bootstrap code.
 The agent receives workspace-write and the provisioned Windows restricted-user backend;
 no unsandboxed fallback is provided. Actions/GitHub/runner token environment variables are
