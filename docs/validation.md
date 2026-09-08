@@ -38,6 +38,18 @@ Documentation distinguishes real local/disposable behavior from simulated GitHub
 provider behavior and unproven live host behavior. No host repository or live runner was
 modified. WI-004 remains Review.
 
+## WI-005 safe work-item creation and explicit Ready authorization — 2026-09-09
+
+WI-004 is internally validated on Draft PR #6. The implementation changes normal
+`new-work-item.ps1` output to `Planned` and adds explicit `mark-ready.ps1` validation;
+it does not change the closed Ready parser or invent a lifecycle state.
+
+`python -m unittest test_work_items -v`: **3 tests passed**. Creation/promotion,
+malformed or incomplete non-promotion with byte-preserved files, and existing valid
+manual Ready support are covered. The complete suite and static checks will be rerun
+at the branch checkpoint. No host repository, live dispatcher, claims, runner or
+provider was used. WI-005 remains Review.
+
 ## WI-002 original-task review revisions — 2026-09-08
 
 Baseline remote main: `a9f2673250f73a1cf567b5e5204f16f2ddaede0c`. The accepted ADR-001

@@ -1,6 +1,6 @@
 # WI-005 — Safe work-item creation and explicit Ready authorization
 
-Status: Planned
+Status: Ready
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -39,5 +39,24 @@ claim/coordination security.
 ## Dependencies and Ready gate
 
 WI-004 must be internally validated first. The closed lifecycle vocabulary and
-minimum eligibility contract are known; no live dependency is required. Ready is
-intentionally withheld until the independent CI work is suitable for review.
+minimum eligibility contract are known; no live dependency is required. WI-004 is
+internally validated and suitable for independent review on Draft PR #6; the
+dependency gate is satisfied for this focused branch.
+
+## Validation / evidence
+
+Focused `python -m unittest test_work_items -v`: 3 tests passed. The complete suite
+and static checks are recorded in `docs/validation.md`.
+
+## Results / evidence links
+
+`new-work-item.ps1` now creates `Status: Planned` with the closed default role and
+T2 tier. The new `mark-ready.ps1` is a separate explicit operation: it accepts only
+one `Status: Planned` field, a valid dispatcher filename, closed role/tier values,
+exactly one non-empty Goal and Acceptance criteria heading, and a non-empty criteria
+list. It changes only the status after all validation succeeds; failed promotion
+leaves the source file unchanged. Existing manually authored valid Ready items still
+pass the unchanged `bridge.py` parser.
+
+Out-of-scope changes: None. Ready remains the automatic execution authorization
+boundary; this work item is Review and is not Done.

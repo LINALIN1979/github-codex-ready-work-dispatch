@@ -19,8 +19,9 @@ $resolvedGoal = if ($Goal) { $Goal } else { $Title }
 $body = @"
 # $id — $Title
 
-Status: Ready
+Status: Planned
 Owner Role: Implementer
+Capability Tier: T2 Standard
 
 ## Goal
 
@@ -32,4 +33,4 @@ $Acceptance
 "@
 [System.IO.File]::WriteAllText($path, $body.TrimStart() + "`n", [System.Text.UTF8Encoding]::new($false))
 Write-Output "Created $path"
-Write-Output 'Review the goal and acceptance criteria, then commit and push the file.'
+Write-Output 'Review the work item, then explicitly promote it with mark-ready.ps1 before commit and push.'
