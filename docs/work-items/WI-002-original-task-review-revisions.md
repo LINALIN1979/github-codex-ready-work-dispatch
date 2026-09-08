@@ -1,0 +1,64 @@
+# WI-002 — Resume original task for authorized review revisions
+
+Status: Planned
+Work Type: Code
+Owner Role: Implementer
+Capability Tier: T2 Standard
+
+## Authorization and linked source of truth
+
+Planned from the repository Owner's 2026-09-08 request for a coordinator-managed review
+loop that reuses the original Codex Developer task. References: ADR-001 (Proposed),
+`docs/coordinator-handoff.md`, `docs/internals.md`, `docs/recovery.md` and SECURITY.md.
+
+## Goal
+
+Provide a host-neutral, fail-closed command and receipt adapter that resumes the exact saved
+Developer task for review feedback without interpreting PR content as execution authority.
+
+## Scope
+
+Versioned command/receipt schema; configured coordination ref and trusted-actor validation;
+exact WI/claim/task/checkout/branch/PR/head checks; `revise` original-task resume; explicit
+technical retry mapping; CAS/idempotency; durable failure/recovery evidence; setup/invocation
+wiring; offline tests and operator documentation.
+
+## Out of scope
+
+No provider-specific ChatGPT Work API, host governance decision, automatic PR-comment
+execution, new task fallback, merge, lifecycle transition, approval inference, active host
+upgrade, secret storage or game/project code.
+
+## Acceptance criteria
+
+1. Feature is disabled by default; existing configuration, Ready dispatch, technical retry
+   and publication-only recovery remain compatible.
+2. A valid `revise` command with exact host/WI/base/claim/task/branch/PR/head identities
+   invokes the saved Codex task once and updates the same branch/Draft PR evidence.
+3. Duplicate, reordered, stale-head, changed-WI, wrong-repository, wrong-actor, forged-role
+   and malformed commands never invoke Codex and produce sanitized durable evidence.
+4. Missing task, running/uncertain claim, dirty or mismatched checkout, ambiguous PR or CAS
+   conflict fails closed without replacement task, force push, fence clearing or lifecycle
+   change.
+5. Versioned receipts make one command ID at-most-once across duplicate workflow events,
+   process interruption and competing dispatchers; recovery never replays an uncertain run.
+6. Developer prompts clearly delimit untrusted feedback from repository governance and do
+   not treat review text as Product/Art/Architecture approval.
+7. Tests use disposable Git remotes, fake Codex/GitHub endpoints and interruption points;
+   PowerShell/YAML/schema/security and backward-compatibility checks pass.
+
+## Dependencies
+
+ADR-001 Accepted; explicit Owner authorization of the final command schema and security
+boundary. No live host/provider is required for offline implementation.
+
+## Validation / evidence
+
+Full unit/integration suite with real disposable Git remotes and fake model/provider;
+duplicate/CAS/crash tests; PowerShell AST, YAML/actionlint, Python 3.10 grammar, setup hash,
+credential scan and `git diff --check`. No live runner or host work item execution.
+
+## Results / evidence links
+
+Not started. Planned; not an eligible dispatcher candidate.
+

@@ -119,6 +119,12 @@ result evidence; repair with `-PublishWi WI-NNN` (or workflow `publish_wi`) with
 rerunning Codex. See the [coordinator handoff contract](docs/coordinator-handoff.md) for
 GitHub settings, durable state, event integration and authority boundaries.
 
+Coordinator-directed ordinary review revisions are not implemented. The proposed
+[revision-command ADR](docs/decisions/ADR-001-coordinator-revision-commands.md) and
+[WI-002](docs/work-items/WI-002-original-task-review-revisions.md) describe a future,
+disabled-by-default path that would resume the original saved task without executing PR
+comments directly.
+
 Quota, timeout and execution failures preserve the checkout and pause further dispatch. After fixing the technical problem, retry from **Actions → Codex Ready work dispatcher → Run workflow**, entering the same `WI-NNN`. Product or approval blockers require a new decision, not a technical retry.
 
 See [docs/recovery.md](docs/recovery.md) for the recovery checklist.
