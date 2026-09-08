@@ -69,10 +69,11 @@ credential scan and `git diff --check`. No live runner or host work item executi
 
 Bounded implementation completed and submitted for independent Review. The adapter is disabled
 by default and requires an explicit command ID plus a fully configured dedicated ref, trusted
-actor/role and authority reference. It verifies the immutable command-origin GitHub actor,
-closed schema/digest, exact base/WI/claim/task/checkout/branch/Draft-PR/head identities and a
-clean stopped checkout before publishing an at-most-once CAS receipt and resuming the original
-task. Duplicate or interrupted commands do not replay; failures preserve sanitized evidence.
+actor/role and authority reference. It requires a verified command-origin signature and actor,
+re-fetches the exact GitHub feedback identity/content, enforces closed command/receipt schemas,
+and checks exact base/WI/claim/task/checkout/branch/Draft-PR/head identities plus a clean stopped
+checkout. Accepted and rejected outcomes are durably CAS-written with sanitized observed identity
+evidence. Duplicate, rejected or interrupted commands do not replay.
 
 Evidence: `docs/validation.md` (WI-002 section), `test_coordination.py`, rendered setup/workflow
 fixture, PowerShell/Python/JSON/actionlint checks and the full offline test suite. No live host,

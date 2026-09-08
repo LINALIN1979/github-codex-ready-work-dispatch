@@ -145,6 +145,10 @@ class CoordinationStore:
                 document.get('schema_version') != 1 or not isinstance(document['commands'], dict) or
                 not isinstance(document['receipts'], dict)):
             raise RuntimeError('Unknown or malformed coordination schema')
+        for command_id, receipt in document['receipts'].items():
+            if not isinstance(command_id, str):
+                raise RuntimeError('Unknown or malformed coordination receipt schema')
+            validate_receipt(command_id, receipt)
         return revision, document
 
     def write(self, revision, document, message):
@@ -181,26 +185,62 @@ class CoordinationStore:
             raise RuntimeError('Coordination command origin not found')
         return origin
 
-    def accept(self, command_id, command, actor_commit):
+    def accept(self, command_id, command, actor_commit, observed):
         revision, document = self.read()
         if document['commands'].get(command_id) != command:
             raise RuntimeError('Coordination command changed during validation')
         if command_id in document['receipts']:
             return None
-        document['receipts'][command_id] = {
-            'schema_version': 1, 'command_id': command_id, 'status': 'accepted',
-            'command_commit': actor_commit, 'accepted_at': now(),
-            'execution_may_have_started': True,
-        }
+        document['receipts'][command_id] = self._receipt(
+            command_id, 'accepted', actor_commit, observed, True)
+        validate_receipt(command_id, document['receipts'][command_id])
         self.write(revision, document, f'{command_id}: accept once')
         return document['receipts'][command_id]
 
-    def finish(self, command_id, status, **evidence):
+    @staticmethod
+    def _receipt(command_id, status, command_commit, observed, may_have_started,
+                 error_code=None):
+        timestamp = now()
+        return {
+            'schema_version': 1, 'command_id': command_id, 'status': status,
+            'command_commit': command_commit, 'recorded_at': timestamp,
+            'finished_at': None if status == 'accepted' else timestamp,
+            'execution_may_have_started': may_have_started,
+            'error_code': error_code, 'observed': observed,
+        }
+
+    def reject(self, command_id, command, command_commit, observed, error_code):
+        for _ in range(3):
+            revision, document = self.read()
+            if command_id in document['receipts']:
+                return None
+            if command is not None and document['commands'].get(command_id) != command:
+                raise RuntimeError('Coordination command changed during rejection')
+            receipt = self._receipt(
+                command_id, 'rejected', command_commit, observed, False, error_code)
+            validate_receipt(command_id, receipt)
+            document['receipts'][command_id] = receipt
+            try:
+                self.write(revision, document, f'{command_id}: rejected')
+                return receipt
+            except RuntimeError:
+                # Reconcile an uncertain/CAS publication. Rejection is safe to retry;
+                # no execution can have started before this fence is durable.
+                continue
+        raise RuntimeError('Coordination rejection could not be published durably')
+
+    def finish(self, command_id, status, error_code=None, **evidence):
         revision, document = self.read()
         receipt = document['receipts'].get(command_id)
         if not receipt or receipt.get('status') != 'accepted':
             raise RuntimeError('Missing accepted coordination receipt')
-        receipt.update(status=status, finished_at=now(), **evidence)
+        unknown = set(evidence) - OBSERVED_FIELDS
+        if unknown:
+            raise RuntimeError('Unknown coordination receipt evidence')
+        receipt['observed'].update(evidence)
+        receipt.update(status=status, finished_at=now(),
+                       error_code=error_code)
+        validate_receipt(command_id, receipt)
         self.write(revision, document, f'{command_id}: {status}')
 
 
@@ -559,6 +599,117 @@ COMMAND_FIELDS = {
     'issuer_actor', 'active_role', 'authority_ref', 'created_at',
 }
 
+RECEIPT_FIELDS = {
+    'schema_version', 'command_id', 'status', 'command_commit', 'recorded_at',
+    'finished_at', 'execution_may_have_started', 'error_code', 'observed',
+}
+RECEIPT_STATUSES = {'accepted', 'rejected', 'completed', 'failed_uncertain'}
+OBSERVED_FIELDS = {
+    'document_revision', 'command_present', 'repository', 'wi_path', 'wi_blob',
+    'action', 'created_at', 'base_sha', 'attempt_id', 'task_id', 'work_branch', 'pr_number',
+    'expected_pr_head', 'feedback_ref', 'feedback_sha256', 'issuer_actor',
+    'active_role', 'authority_ref', 'verified_actor', 'feedback_kind',
+    'feedback_id', 'checkout_sha256', 'result_attempt_id', 'result_commit',
+    'result_pr_number', 'result_pr_status', 'claim_status', 'observed_base_sha',
+    'observed_wi_blob', 'observed_checkout_head', 'observed_remote_head',
+    'observed_pr_head',
+}
+
+
+def _optional_string(value):
+    return value if isinstance(value, str) else None
+
+
+def coordination_observations(document_revision, command, **verified):
+    """Create fixed-shape, path-safe receipt evidence from untrusted input."""
+    source = command if isinstance(command, dict) else {}
+    checkout = source.get('checkout')
+    return {
+        'document_revision': document_revision,
+        'command_present': isinstance(command, dict),
+        'repository': _optional_string(source.get('repository')),
+        'action': _optional_string(source.get('action')),
+        'created_at': _optional_string(source.get('created_at')),
+        'wi_path': _optional_string(source.get('wi_path')),
+        'wi_blob': _optional_string(source.get('wi_blob')),
+        'base_sha': _optional_string(source.get('base_sha')),
+        'attempt_id': _optional_string(source.get('attempt_id')),
+        'task_id': _optional_string(source.get('task_id')),
+        'work_branch': _optional_string(source.get('work_branch')),
+        'pr_number': source.get('pr_number') if type(source.get('pr_number')) is int else None,
+        'expected_pr_head': _optional_string(source.get('expected_pr_head')),
+        'feedback_ref': _optional_string(source.get('feedback_ref')),
+        'feedback_sha256': _optional_string(source.get('feedback_sha256')),
+        'issuer_actor': _optional_string(source.get('issuer_actor')),
+        'active_role': _optional_string(source.get('active_role')),
+        'authority_ref': _optional_string(source.get('authority_ref')),
+        'verified_actor': _optional_string(verified.get('verified_actor')),
+        'feedback_kind': _optional_string(verified.get('feedback_kind')),
+        'feedback_id': _optional_string(verified.get('feedback_id')),
+        'checkout_sha256': (hashlib.sha256(checkout.encode('utf-8')).hexdigest()
+                            if isinstance(checkout, str) else None),
+        'result_attempt_id': None,
+        'result_commit': None,
+        'result_pr_number': None,
+        'result_pr_status': None,
+        'claim_status': _optional_string(verified.get('claim_status')),
+        'observed_base_sha': _optional_string(verified.get('observed_base_sha')),
+        'observed_wi_blob': _optional_string(verified.get('observed_wi_blob')),
+        'observed_checkout_head': _optional_string(verified.get('observed_checkout_head')),
+        'observed_remote_head': _optional_string(verified.get('observed_remote_head')),
+        'observed_pr_head': _optional_string(verified.get('observed_pr_head')),
+    }
+
+
+def validate_receipt(command_id, receipt):
+    if (not isinstance(receipt, dict) or set(receipt) != RECEIPT_FIELDS or
+            receipt.get('schema_version') != 1 or receipt.get('command_id') != command_id or
+            receipt.get('status') not in RECEIPT_STATUSES or
+            not isinstance(receipt.get('recorded_at'), str) or
+            type(receipt.get('execution_may_have_started')) is not bool or
+            not isinstance(receipt.get('observed'), dict) or
+            set(receipt['observed']) != OBSERVED_FIELDS):
+        raise RuntimeError('Unknown or malformed coordination receipt schema')
+    nullable_strings = RECEIPT_FIELDS - {
+        'schema_version', 'command_id', 'status', 'recorded_at',
+        'execution_may_have_started', 'observed',
+    }
+    if any(receipt.get(field) is not None and not isinstance(receipt[field], str)
+           for field in nullable_strings):
+        raise RuntimeError('Unknown or malformed coordination receipt schema')
+    observed = receipt['observed']
+    observed_numbers = {'pr_number', 'result_pr_number'}
+    observed_flags = {'command_present'}
+    for field, value in observed.items():
+        if field in observed_numbers:
+            valid = value is None or type(value) is int
+        elif field in observed_flags:
+            valid = type(value) is bool
+        else:
+            valid = value is None or isinstance(value, str)
+        if not valid:
+            raise RuntimeError('Unknown or malformed coordination receipt schema')
+    if (not re.fullmatch(r'[0-9a-f]{40}', observed['document_revision']) or
+            (receipt['command_commit'] is not None and
+             not re.fullmatch(r'[0-9a-f]{40}', receipt['command_commit']))):
+        raise RuntimeError('Unknown or malformed coordination receipt schema')
+    if receipt['status'] == 'accepted':
+        if (receipt['command_commit'] is None or receipt['finished_at'] is not None or
+                receipt['error_code'] is not None or
+                receipt['execution_may_have_started'] is not True):
+            raise RuntimeError('Unknown or malformed coordination receipt schema')
+    elif receipt['status'] == 'rejected':
+        if (not receipt['finished_at'] or not receipt['error_code'] or
+                receipt['execution_may_have_started'] is not False):
+            raise RuntimeError('Unknown or malformed coordination receipt schema')
+    else:
+        if (receipt['command_commit'] is None or not receipt['finished_at'] or
+                receipt['execution_may_have_started'] is not True or
+                (receipt['status'] == 'completed' and receipt['error_code'] is not None) or
+                (receipt['status'] == 'failed_uncertain' and not receipt['error_code'])):
+            raise RuntimeError('Unknown or malformed coordination receipt schema')
+    return receipt
+
 
 def validate_coordination_command(config, command_id, command):
     """Validate the closed command vocabulary without interpreting feedback text."""
@@ -594,10 +745,11 @@ def validate_coordination_command(config, command_id, command):
         raise RuntimeError('Coordination creation time requires a timezone')
     if type(command['pr_number']) is not int or command['pr_number'] < 0:
         raise RuntimeError('Invalid PR identity')
-    feedback_prefix = f'https://github.com/{config["repository"]}/'
+    feedback_identity = parse_feedback_ref(config, command['feedback_ref'])
+    empty_retry_feedback = (command['action'] == 'technical_retry' and
+                            not command['feedback_ref'] and not command['feedback'])
     if (len(command['feedback'].encode('utf-8')) > 50000 or
-            not command['feedback_ref'].startswith(feedback_prefix) or
-            re.search(r'\s', command['feedback_ref']) or
+            (not empty_retry_feedback and feedback_identity is None) or
             '--- END UNTRUSTED REVIEW FEEDBACK ---' in command['feedback']):
         raise RuntimeError('Invalid or oversized feedback')
     digest = hashlib.sha256(command['feedback'].encode('utf-8')).hexdigest()
@@ -614,16 +766,61 @@ def validate_coordination_command(config, command_id, command):
 def verify_coordination_actor(config, revision, command):
     commit = github_api(config, 'GET', 'commits/' + revision)
     actor = (commit.get('author') or {}).get('login') if isinstance(commit, dict) else None
-    if actor != command['issuer_actor']:
-        raise RuntimeError('Coordination commit actor does not match command issuer')
+    verification = ((commit.get('commit') or {}).get('verification')
+                    if isinstance(commit, dict) else None)
+    if (not isinstance(commit, dict) or commit.get('sha') != revision or
+            actor != command['issuer_actor'] or
+            not isinstance(verification, dict) or verification.get('verified') is not True):
+        raise RuntimeError('Coordination commit lacks a verified matching actor')
+    return actor
 
 
-def validate_coordination_context(config, root, store, command):
+def parse_feedback_ref(config, feedback_ref):
+    if not isinstance(feedback_ref, str):
+        return None
+    repository = re.escape(config['repository'])
+    match = re.fullmatch(
+        rf'https://github\.com/{repository}/pull/(\d+)#(pullrequestreview|issuecomment)-(\d+)',
+        feedback_ref)
+    if not match:
+        return None
+    return int(match.group(1)), match.group(2), match.group(3)
+
+
+def verify_feedback(config, command):
+    if (command['action'] == 'technical_retry' and not command['feedback_ref'] and
+            not command['feedback']):
+        return {'feedback_kind': None, 'feedback_id': None}
+    parsed = parse_feedback_ref(config, command['feedback_ref'])
+    if not parsed:
+        raise RuntimeError('Feedback reference is not an immutable supported GitHub identity')
+    pr_number, kind, identity = parsed
+    if pr_number != command['pr_number']:
+        raise RuntimeError('Feedback reference targets another pull request')
+    endpoint = (f'pulls/{pr_number}/reviews/{identity}' if kind == 'pullrequestreview'
+                else f'issues/comments/{identity}')
+    feedback = github_api(config, 'GET', endpoint)
+    actor = (feedback.get('user') or {}).get('login') if isinstance(feedback, dict) else None
+    if (not isinstance(feedback, dict) or str(feedback.get('id')) != identity or
+            feedback.get('html_url') != command['feedback_ref'] or
+            feedback.get('body') != command['feedback'] or
+            actor != command['issuer_actor']):
+        raise RuntimeError('Feedback identity, content, or actor mismatch')
+    if kind == 'issuecomment':
+        expected_issue = f'https://api.github.com/repos/{config["repository"]}/issues/{pr_number}'
+        if feedback.get('issue_url') != expected_issue:
+            raise RuntimeError('Feedback comment targets another pull request')
+    return {'feedback_kind': kind, 'feedback_id': identity}
+
+
+def validate_coordination_context(config, root, store, command, observations=None):
+    observations = observations if observations is not None else {}
     revision, state = store.read()
     matches = [item for item in state['claims'].values() if item.get('path') == command['wi_path']]
     if len(matches) != 1:
         raise RuntimeError('Referenced WI claim is missing or ambiguous')
     record = matches[0]
+    observations['claim_status'] = _optional_string(record.get('status'))
     wi = record['wi']
     if any(key != wi and item.get('status') == 'running' for key, item in state['claims'].items()):
         raise RuntimeError('Another running claim fences coordination')
@@ -652,9 +849,11 @@ def validate_coordination_context(config, root, store, command):
 
     git(store.path, 'fetch', '--quiet', 'origin', 'refs/heads/' + config.get('base_branch', 'main'))
     current_base = git(store.path, 'rev-parse', 'FETCH_HEAD').stdout.strip()
+    observations['observed_base_sha'] = current_base
     if current_base != command['base_sha']:
         raise RuntimeError('Base branch changed; command is stale')
     observed_blob = git(store.path, 'rev-parse', f'{current_base}:{command["wi_path"]}').stdout.strip()
+    observations['observed_wi_blob'] = observed_blob
     if observed_blob != command['wi_blob']:
         raise RuntimeError('Work item changed; command is stale')
 
@@ -670,13 +869,16 @@ def validate_coordination_context(config, root, store, command):
     if git(folder, 'branch', '--show-current').stdout.strip() != command['work_branch']:
         raise RuntimeError('Recovery checkout branch mismatch')
     head = git(folder, 'rev-parse', 'HEAD').stdout.strip()
+    observations['observed_checkout_head'] = head
     if command['expected_pr_head'] and head != command['expected_pr_head']:
         raise RuntimeError('Recovery checkout head mismatch')
     remote_head = git(folder, 'ls-remote', 'origin', 'refs/heads/' + command['work_branch']).stdout.split()
+    observations['observed_remote_head'] = remote_head[0] if remote_head else None
     if not remote_head or remote_head[0] != head:
         raise RuntimeError('Remote work branch head mismatch')
     if command['pr_number']:
         pr = verify_pr(config, record, github_api(config, 'GET', f'pulls/{command["pr_number"]}'))
+        observations['observed_pr_head'] = _optional_string(pr.get('head', {}).get('sha'))
         if pr.get('head', {}).get('sha') != command['expected_pr_head']:
             raise RuntimeError('Draft PR head changed; command is stale')
     return revision, state, record
@@ -711,11 +913,38 @@ def process_coordination(config, root, store, command_id):
         raise RuntimeError('Coordination trust policy is incomplete')
     coordination = CoordinationStore(root / 'coordination.git', config['remote'], ref)
     command_revision, document = coordination.read()
-    command = validate_coordination_command(config, command_id, document['commands'].get(command_id))
-    command_origin = coordination.command_origin(command_revision, command_id, command)
-    verify_coordination_actor(config, command_origin, command)
-    validate_coordination_context(config, root, store, command)
-    if coordination.accept(command_id, command, command_origin) is None:
+    if command_id in document['receipts']:
+        print(f'{command_id}: already received; no Developer invocation')
+        return
+    command = document['commands'].get(command_id)
+    command_origin = None
+    observations = coordination_observations(command_revision, command)
+    context_observations = {}
+    rejection_code = 'command_origin_invalid'
+    try:
+        command_origin = coordination.command_origin(command_revision, command_id, command)
+        rejection_code = 'command_schema_invalid'
+        command = validate_coordination_command(config, command_id, command)
+        rejection_code = 'commit_actor_untrusted'
+        verified_actor = verify_coordination_actor(config, command_origin, command)
+        observations = coordination_observations(
+            command_revision, command, verified_actor=verified_actor)
+        rejection_code = 'feedback_identity_invalid'
+        feedback_identity = verify_feedback(config, command)
+        observations = coordination_observations(
+            command_revision, command, verified_actor=verified_actor, **feedback_identity)
+        rejection_code = 'coordination_context_invalid'
+        validate_coordination_context(
+            config, root, store, command, context_observations)
+        observations = coordination_observations(
+            command_revision, command, verified_actor=verified_actor, **feedback_identity,
+            **context_observations)
+    except Exception:
+        observations.update(context_observations)
+        coordination.reject(command_id, command, command_origin,
+                            observations, rejection_code)
+        raise
+    if coordination.accept(command_id, command, command_origin, observations) is None:
         print(f'{command_id}: already received; no Developer invocation')
         return
     try:
@@ -727,9 +956,11 @@ def process_coordination(config, root, store, command_id):
             run_one(config, root, store, record, True)
         _, final_state = store.read()
         final = final_state['claims'][record['wi']]
-        coordination.finish(command_id, 'completed', attempt_id=record['attempt_id'],
-                            result_commit=final.get('result_commit'), pr_number=final.get('pr_number'),
-                            pr_status=final.get('pr_status'))
+        coordination.finish(command_id, 'completed',
+                            result_attempt_id=record['attempt_id'],
+                            result_commit=final.get('result_commit'),
+                            result_pr_number=final.get('pr_number'),
+                            result_pr_status=final.get('pr_status'))
     except Exception:
         try:
             coordination.finish(command_id, 'failed_uncertain', error_code='coordination_execution_failed')

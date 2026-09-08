@@ -8,9 +8,9 @@ import uuid
 from unittest.mock import patch
 
 from bridge import (CoordinationStore, claim_coordination_execution, run_revision,
-                    process_coordination,
+                    coordination_observations, process_coordination,
                     validate_coordination_command, validate_coordination_context,
-                    verify_coordination_actor)
+                    validate_receipt, verify_coordination_actor, verify_feedback)
 
 
 BASE = '1' * 40
@@ -64,7 +64,7 @@ class CoordinationCommandTests(unittest.TestCase):
             'wi_blob': BLOB, 'base_sha': BASE, 'attempt_id': ATTEMPT,
             'task_id': TASK, 'checkout': 'unused', 'work_branch': 'codex/test',
             'pr_number': 7, 'expected_pr_head': HEAD,
-            'feedback_ref': 'https://github.com/fixture/repo/pull/7#review-1',
+            'feedback_ref': 'https://github.com/fixture/repo/pull/7#pullrequestreview-101',
             'feedback_sha256': hashlib.sha256(self.feedback.encode()).hexdigest(),
             'feedback': self.feedback, 'issuer_actor': 'owner',
             'active_role': 'Technical Planner', 'authority_ref': 'ADR-007',
@@ -85,12 +85,58 @@ class CoordinationCommandTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             validate_coordination_command(self.config, 'cmd-001', changed)
 
+    def test_technical_retry_without_pr_allows_empty_feedback_identity(self):
+        retry = dict(self.command, action='technical_retry', pr_number=0,
+                     expected_pr_head='', feedback_ref='', feedback='',
+                     feedback_sha256=hashlib.sha256(b'').hexdigest())
+        self.assertIs(validate_coordination_command(self.config, 'cmd-001', retry), retry)
+        self.assertEqual(verify_feedback(self.config, retry),
+                         {'feedback_kind': None, 'feedback_id': None})
+
     def test_commit_actor_must_match_allowlisted_issuer(self):
-        with patch('bridge.github_api', return_value={'author': {'login': 'owner'}}):
+        verified = {'sha': HEAD, 'author': {'login': 'owner'},
+                    'commit': {'verification': {'verified': True}}}
+        with patch('bridge.github_api', return_value=verified):
             verify_coordination_actor(self.config, HEAD, self.command)
-        with patch('bridge.github_api', return_value={'author': {'login': 'attacker'}}), \
-                self.assertRaises(RuntimeError):
-            verify_coordination_actor(self.config, HEAD, self.command)
+        for payload in (
+                dict(verified, author={'login': 'attacker'}),
+                dict(verified, commit={'verification': {'verified': False}}),
+                dict(verified, sha='9' * 40)):
+            with self.subTest(payload=payload), patch('bridge.github_api', return_value=payload), \
+                    self.assertRaises(RuntimeError):
+                verify_coordination_actor(self.config, HEAD, self.command)
+
+    def test_feedback_reference_is_canonical_and_api_content_is_exact(self):
+        review = {'id': 101, 'html_url': self.command['feedback_ref'],
+                  'body': self.feedback, 'user': {'login': 'owner'}}
+        with patch('bridge.github_api', return_value=review):
+            self.assertEqual(verify_feedback(self.config, self.command),
+                             {'feedback_kind': 'pullrequestreview', 'feedback_id': '101'})
+        comment_command = dict(
+            self.command,
+            feedback_ref='https://github.com/fixture/repo/pull/7#issuecomment-202')
+        comment = {'id': 202, 'html_url': comment_command['feedback_ref'],
+                   'issue_url': 'https://api.github.com/repos/fixture/repo/issues/7',
+                   'body': self.feedback, 'user': {'login': 'owner'}}
+        with patch('bridge.github_api', return_value=comment):
+            self.assertEqual(verify_feedback(self.config, comment_command),
+                             {'feedback_kind': 'issuecomment', 'feedback_id': '202'})
+        malformed = dict(self.command,
+                         feedback_ref='https://github.com/fixture/repo/issues/7')
+        with self.assertRaises(RuntimeError):
+            validate_coordination_command(self.config, 'cmd-001', malformed)
+        for changed in (
+                dict(self.command, feedback_ref='https://github.com/fixture/repo/pull/8#pullrequestreview-101'),
+                dict(self.command, feedback_ref='https://github.com/fixture/repo/pull/7#issuecomment-101')):
+            with self.subTest(ref=changed['feedback_ref']), \
+                    patch('bridge.github_api', return_value=review), self.assertRaises(RuntimeError):
+                verify_feedback(self.config, changed)
+        for payload in (dict(review, body='different'),
+                        dict(review, user={'login': 'attacker'}),
+                        dict(review, id=999)):
+            with self.subTest(payload=payload), patch('bridge.github_api', return_value=payload), \
+                    self.assertRaises(RuntimeError):
+                verify_feedback(self.config, self.command)
 
     def test_exact_context_accepts_valid_and_rejects_stale_or_dirty(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -210,13 +256,18 @@ class CoordinationCommandTests(unittest.TestCase):
                               'receipts': {} if self.status is None else {'cmd-001': {'status': self.status}}}
 
             def command_origin(self, revision, command_id, observed):
+                if observed is None:
+                    raise RuntimeError('missing command')
                 return HEAD
 
-            def accept(self, command_id, observed, origin):
+            def accept(self, command_id, observed, origin, evidence):
                 if self.status is not None:
                     return None
                 self.status = 'accepted'
                 return {'status': 'accepted'}
+
+            def reject(self, command_id, observed, origin, evidence, error_code):
+                self.status = 'rejected'
 
             def finish(self, command_id, status, **evidence):
                 self.status = status
@@ -225,6 +276,8 @@ class CoordinationCommandTests(unittest.TestCase):
         claimed = dict(old, attempt_id='6' * 32, status='running')
         with patch('bridge.CoordinationStore', return_value=coordination), \
                 patch('bridge.verify_coordination_actor'), \
+                patch('bridge.verify_feedback', return_value={
+                    'feedback_kind': 'pullrequestreview', 'feedback_id': '101'}), \
                 patch('bridge.validate_coordination_context', return_value=(HEAD, state, old)), \
                 patch('bridge.claim_coordination_execution', return_value=claimed), \
                 patch('bridge.run_revision', side_effect=RuntimeError('interrupted')) as resume:
@@ -234,8 +287,87 @@ class CoordinationCommandTests(unittest.TestCase):
             process_coordination(config, Path('root'), store, 'cmd-001')
             self.assertEqual(resume.call_count, 1)
 
+    def test_rejections_are_durable_closed_sanitized_receipts(self):
+        config = dict(self.config, coordination_ref='refs/heads/codex/coordination')
+
+        class FakeCoordination:
+            def __init__(self, command):
+                self.command = command
+                self.receipt = None
+
+            def read(self):
+                receipts = {} if self.receipt is None else {'cmd-001': self.receipt}
+                return HEAD, {'schema_version': 1,
+                              'commands': {'cmd-001': self.command}, 'receipts': receipts}
+
+            def command_origin(self, revision, command_id, observed):
+                if observed is None:
+                    raise RuntimeError('missing command')
+                return HEAD
+
+            def reject(self, command_id, command, origin, observed, error_code):
+                self.receipt = CoordinationStore._receipt(
+                    command_id, 'rejected', origin, observed, False, error_code)
+                validate_receipt(command_id, self.receipt)
+
+            def accept(self, *args):
+                raise AssertionError('rejected command must not be accepted')
+
+        cases = [
+            ('missing', None, None),
+            ('malformed', dict(self.command, extra='no'), None),
+            ('wrong_actor', dict(self.command, issuer_actor='attacker'), None),
+            ('forged_role', dict(self.command, active_role='Product Owner'), None),
+            ('unsigned', self.command, 'actor'),
+            ('bad_feedback', self.command, 'feedback'),
+            ('stale_head', self.command, 'context'),
+            ('changed_wi', self.command, 'context'),
+            ('dirty_checkout', self.command, 'context'),
+        ]
+        for name, command, failing_phase in cases:
+            coordination = FakeCoordination(command)
+            actor_error = RuntimeError('unsigned') if failing_phase == 'actor' else None
+            feedback_error = RuntimeError('bad feedback') if failing_phase == 'feedback' else None
+            context_error = RuntimeError(name) if failing_phase == 'context' else None
+            with self.subTest(name=name), \
+                    patch('bridge.CoordinationStore', return_value=coordination), \
+                    patch('bridge.verify_coordination_actor', return_value='owner',
+                          side_effect=actor_error), \
+                    patch('bridge.verify_feedback', return_value={
+                        'feedback_kind': 'pullrequestreview', 'feedback_id': '101'},
+                          side_effect=feedback_error), \
+                    patch('bridge.validate_coordination_context', return_value=(HEAD, {}, {}),
+                          side_effect=context_error), \
+                    self.assertRaises(RuntimeError):
+                process_coordination(config, Path('root'), FakeStateStore({}), 'cmd-001')
+            self.assertEqual(coordination.receipt['status'], 'rejected')
+            self.assertFalse(coordination.receipt['execution_may_have_started'])
+            serialized = json.dumps(coordination.receipt)
+            if command is not None:
+                self.assertNotIn(command.get('checkout', ''), serialized)
+                self.assertRegex(coordination.receipt['observed']['checkout_sha256'],
+                                 r'^[0-9a-f]{64}$')
+            else:
+                self.assertIsNone(coordination.receipt['command_commit'])
+
 
 class CoordinationStoreTests(unittest.TestCase):
+    def test_receipt_schema_rejects_unknown_and_malformed_fields(self):
+        observed = coordination_observations(HEAD, {'repository': 'fixture/repo'})
+        receipt = CoordinationStore._receipt(
+            'cmd-1', 'rejected', HEAD, observed, False, 'command_schema_invalid')
+        self.assertIs(validate_receipt('cmd-1', receipt), receipt)
+        self.assertEqual(validate_receipt(
+            'cmd-1', dict(receipt, command_commit=None))['status'], receipt['status'])
+        for changed in (
+                dict(receipt, extra='forbidden'),
+                dict(receipt, schema_version=2),
+                dict(receipt, command_commit='not-a-sha'),
+                dict(receipt, execution_may_have_started=True),
+                dict(receipt, observed=dict(observed, extra='forbidden'))):
+            with self.subTest(changed=changed), self.assertRaises(RuntimeError):
+                validate_receipt('cmd-1', changed)
+
     def test_command_receipt_is_at_most_once_and_command_is_immutable(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -247,7 +379,10 @@ class CoordinationStoreTests(unittest.TestCase):
             git(seed, 'config', 'user.name', 'Test')
             git(seed, 'config', 'user.email', 'test@example.invalid')
             command = {'schema_version': 1, 'command_id': 'cmd-1'}
-            document = {'schema_version': 1, 'commands': {'cmd-1': command}, 'receipts': {}}
+            rejected_command = {'schema_version': 99, 'checkout': 'secret-local-path'}
+            document = {'schema_version': 1,
+                        'commands': {'cmd-1': command, 'cmd-2': rejected_command},
+                        'receipts': {}}
             (seed / 'coordination.json').write_text(json.dumps(document), encoding='utf-8')
             git(seed, 'add', 'coordination.json')
             git(seed, 'commit', '-m', 'command')
@@ -261,14 +396,27 @@ class CoordinationStoreTests(unittest.TestCase):
             self.assertEqual(first.command_origin(revision, 'cmd-1', command), origin)
             stale_revision, stale_document = second.read()
             competing = copy.deepcopy(stale_document)
-            competing['receipts']['other'] = {'schema_version': 1, 'status': 'accepted'}
-            self.assertIsNotNone(first.accept('cmd-1', command, origin))
+            observations = coordination_observations(revision, command)
+            competing['receipts']['other'] = first._receipt(
+                'other', 'accepted', origin,
+                coordination_observations(revision, {'repository': 'fixture/repo'}), True)
+            self.assertIsNotNone(first.accept('cmd-1', command, origin, observations))
             with self.assertRaises(RuntimeError):
                 second.write(stale_revision, competing, 'competing stale receipt')
-            self.assertIsNone(second.accept('cmd-1', command, origin))
+            self.assertIsNone(second.accept('cmd-1', command, origin, observations))
             first.finish('cmd-1', 'completed', result_commit=HEAD)
             _, final = second.read()
             self.assertEqual(final['receipts']['cmd-1']['status'], 'completed')
+            validate_receipt('cmd-1', final['receipts']['cmd-1'])
+            current_revision, _ = first.read()
+            rejected_observations = coordination_observations(
+                current_revision, rejected_command)
+            first.reject('cmd-2', rejected_command, origin, rejected_observations,
+                         'command_schema_invalid')
+            _, rejected = second.read()
+            self.assertEqual(rejected['receipts']['cmd-2']['status'], 'rejected')
+            self.assertNotIn('secret-local-path',
+                             json.dumps(rejected['receipts']['cmd-2']))
 
 
 if __name__ == '__main__':

@@ -59,12 +59,26 @@ The branch document is a closed schema-v1 object:
 
 Every field is required. `revise` requires the existing open Draft PR and exact head.
 `technical_retry` maps to the existing stopped quota/error/timeout recovery and must use the
-claim's current PR/result identity, or zero/empty when none exists. Feedback is untrusted data;
-its immutable GitHub reference, digest and introducing GitHub actor are all checked.
+claim's current PR/result identity, or zero/empty when none exists. A technical retry without a PR
+uses empty feedback and reference fields plus the SHA-256 of the empty string. Otherwise feedback
+is untrusted data and its immutable GitHub reference, digest and actor are all checked.
 
 Commands are append-only. Mutating or removing a published command fails closed. The dispatcher
-locates the commit that first introduced the command and verifies GitHub's associated actor login
-against the configured allowlist; a self-declared `issuer_actor` is insufficient.
+locates the commit that first introduced the command and requires GitHub to report both the exact
+associated actor login and a verified commit signature. A self-declared `issuer_actor` or unsigned
+author-email attribution is insufficient. `feedback_ref` accepts only the exact canonical
+`pullrequestreview-ID` or `issuecomment-ID` URL for the stated PR. The adapter fetches that object
+from GitHub and requires its immutable ID, URL, body and actor to match the command.
+
+Receipts are also schema version 1 closed objects. Every receipt has exactly these top-level
+fields: `schema_version`, `command_id`, `status`, `command_commit`, `recorded_at`, `finished_at`,
+`execution_may_have_started`, `error_code` and `observed`. `observed` has a fixed schema containing
+the command/document, repository, action, WI/base/claim/task/branch/PR/head, feedback, actor/role,
+authority and result identities. The local checkout is represented only by its SHA-256 digest so
+machine paths or credentials cannot enter coordination history. Unknown, missing or mistyped
+receipt fields reject the whole document. `command_commit` is null only when rejection occurs
+before a command origin can be established; `observed.document_revision` still records the exact
+coordination document that was inspected.
 
 ## Invoke and recovery
 
@@ -76,6 +90,12 @@ Invoke exactly one explicit command ID:
 
 The generated workflow exposes the same `coordination_command` manual input. It is mutually
 exclusive with `retry_wi` and `publish_wi`. No PR event automatically fills or executes it.
+
+Every syntactically addressable rejected command is first published as a `rejected` receipt with
+a bounded error code and `execution_may_have_started: false`. This includes malformed commands,
+wrong actors or roles, unverifiable feedback, stale base/PR heads, changed work items and dirty or
+mismatched checkouts. Publication is reconciled on CAS conflicts, and no Developer invocation is
+possible on the rejection path.
 
 Before Codex starts, the dispatcher publishes an `accepted` receipt by non-force CAS. Therefore
 duplicate, reordered and competing invocations cannot run the same command twice. A crash after

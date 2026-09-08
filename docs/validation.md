@@ -6,11 +6,12 @@ Baseline remote main: `a9f2673250f73a1cf567b5e5204f16f2ddaede0c`. The accepted A
 and Ready work item were integrated before implementation. The work branch changes WI-002 to
 Review; host activation and live deployment remain out of scope.
 
-`python -B -m unittest discover -s . -p "test_*.py" -v`: **26 tests passed** on Windows /
-Python 3.14.6. Seven WI-002 tests cover the closed command schema, actor/role/authority and
-feedback digest rejection, exact identity/stale-head/dirty-checkout fencing, preservation of the
-same task/branch/PR, exact resume invocation, command-origin immutability, real Git CAS conflict,
-duplicate receipts and interrupted-command no-replay. The 19 pre-existing tests continue to cover
+`python -B -m unittest discover -s . -p "test_*.py" -v`: **30 tests passed** on Windows /
+Python 3.14.6. Eleven WI-002 tests cover the closed command and receipt schemas, verified commit
+actor/signature, exact GitHub feedback identity/body/actor, durable sanitized rejection receipts,
+exact identity/stale-head/changed-WI/dirty-checkout fencing, preservation of the same task/branch/PR,
+exact resume invocation, command-origin immutability, real Git CAS conflict, duplicate receipts and
+interrupted-command no-replay. The 19 pre-existing tests continue to cover
 Ready dispatch, technical retries, real Git claim CAS, result publication/recovery, PR identity
 conflicts, token failures and host locking.
 
