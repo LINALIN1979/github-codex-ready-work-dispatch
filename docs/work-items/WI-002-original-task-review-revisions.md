@@ -1,6 +1,6 @@
 # WI-002 — Resume original task for authorized review revisions
 
-Status: Review
+Status: Done
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -67,7 +67,7 @@ credential scan and `git diff --check`. No live runner or host work item executi
 
 ## Results / evidence links
 
-Bounded implementation completed and submitted for independent Review. The adapter is disabled
+Bounded implementation completed and passed independent Review. The adapter is disabled
 by default and requires an explicit command ID plus a fully configured dedicated ref, trusted
 actor/role and authority reference. It requires a verified command-origin signature and actor,
 re-fetches the exact GitHub feedback identity/content, enforces closed command/receipt schemas,
@@ -77,4 +77,15 @@ evidence. Duplicate, rejected or interrupted commands do not replay.
 
 Evidence: `docs/validation.md` (WI-002 section), `test_coordination.py`, rendered setup/workflow
 fixture, PowerShell/Python/JSON/actionlint checks and the full offline test suite. No live host,
-provider command, runner upgrade, merge, lifecycle approval or project code was exercised.
+provider command, runner upgrade, merge or project code was exercised.
+
+Independent review completed on 2026-09-08 after revisions `cc8632f` and `121d737` closed the
+remaining commit-identity, feedback, receipt-validation, resumed-task identity and receipt-origin
+findings. The repository Owner accepted the final evidence, approved WI-002 as Done and authorized
+dispatcher PR #4 for merge. Out-of-scope changes: None. This approval does not authorize WI-007,
+an active host upgrade, runner activation or live cutover.
+
+## Completion notes
+
+Owner review and final independent Review are complete. The disabled-by-default coordinator
+revision adapter is accepted for merge. WI-007 and all live host/cutover work remain prohibited.
