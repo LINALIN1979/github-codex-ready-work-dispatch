@@ -1,6 +1,6 @@
 # WI-003 — Source and installation integrity
 
-Status: Review
+Status: Done
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -77,5 +77,6 @@ recovery checkout, configuration, force push or history rewrite was touched.
 
 ## Completion notes
 
-Implementation and internal validation are complete. This work item is intentionally
-left at Review for independent review; it is not Done and no PR was merged.
+Independent review approved the implementation. PR #5 was merged to `main` with merge
+commit `668a8f75574a52850e019d5e88df213bce163cc4` on 2026-09-09. The lifecycle record is
+therefore Done; no historical rewrite or host activation was performed.

@@ -22,6 +22,50 @@ The source-without-Git policy is explicit: setup fails closed. No host repositor
 runner, provider, live Codex, claim, log, recovery checkout, config, or coordination
 state was modified. The WI remains Review pending independent review.
 
+## WI-004 independent GitHub-hosted CI — 2026-09-09
+
+Base is the internally validated WI-003 branch; focused checkpoint `43d2de4` plus
+the YAML quoting correction in the current Review branch. The new `.github/workflows/ci.yml`
+uses only GitHub-hosted Ubuntu/Windows runners, read-only contents permission, no secrets,
+Codex, SSH, coordination commands or repository writes. It covers Python 3.10/3.14 full
+suite, PowerShell AST, Python 3.10 grammar, credential/diff checks, PyYAML 6.0.3
+workflow/template validation and actionlint v1.7.7.
+
+The full local suite passed: **37 tests in 94.815 seconds**. Python 3.10 AST,
+PowerShell AST, `git diff --check`, credential scan and isolated `ci/validate_yaml.py`
+passed. GitHub-hosted run `34253865489` validated the workflow/template job, actionlint
+and both Ubuntu Python jobs, but exposed two Windows-only issues: the credential scan
+matched its own workflow file, and temporary-path normalization differed between
+`Path.resolve()` and an unresolved `Path`. The current branch fixes both without
+weakening the checks: the dedicated scanner excludes only its own workflow and the
+validation record, while all work-root containment comparisons normalize both
+operands. The corrected local suite now passes **37 tests in 102.987 seconds**, including
+the short-path resume regression exposed by the hosted runner. Corrected GitHub-hosted
+run **34295193351** passed all six jobs: Ubuntu/Windows × Python 3.10/3.14, PowerShell
+and static checks, and workflow/template validation including actionlint v1.7.7. The
+dedicated `ci/check_credentials.py` scan and isolated PyYAML 6.0.3 workflow/template
+validation also pass locally.
+Documentation distinguishes real local/disposable behavior from simulated GitHub/Codex/
+provider behavior and unproven live host behavior. No host repository or live runner was
+modified. WI-004 remains Review.
+
+## WI-004 review revisions — 2026-09-09
+
+`run_revision` again resolves the recorded checkout and allowed work root once, then uses
+the canonical checkout for execution and checkpoint operations. The focused resume test
+now compares canonical identities and asserts canonical containment. The credential scan
+reports only relative path, line number and a bounded type label; a regression fixture
+proves a fake token never appears in serialized stdout/stderr.
+
+`ci/check_diff_range.py` validates full SHAs and checks pull-request base→head, push
+before→head, or first-commit→head for initial/edge pushes using argument-list subprocess
+calls. The workflow fetches complete history and `ci/validate_yaml.py` verifies the
+range-validation wiring. GitHub-hosted run **34298388997** for head
+`3a020d2e7beb797946b852207e37fa220b64d572` passed all six jobs: Ubuntu/Windows ×
+Python 3.10/3.14, PowerShell/static checks and workflow/template validation. This
+run is associated with the revised PR head; no same-commit success claim is made
+for an earlier head.
+
 ## WI-002 original-task review revisions — 2026-09-08
 
 Baseline remote main: `a9f2673250f73a1cf567b5e5204f16f2ddaede0c`. The accepted ADR-001

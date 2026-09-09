@@ -280,7 +280,7 @@ class CoordinationCommandTests(unittest.TestCase):
                          (TASK, 'codex/test', 7))
         self.assertEqual(record['status'], 'running')
 
-    def test_revision_resumes_exact_task_once_and_keeps_branch(self):
+    def test_revision_resumes_exact_task_once_with_canonical_checkout(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             checkout = root / 'work' / 'saved'
@@ -317,7 +317,8 @@ class CoordinationCommandTests(unittest.TestCase):
             self.assertIn('resume', calls[0][0])
             self.assertIn(TASK, calls[0][0])
             self.assertIn(self.feedback, calls[0][1])
-            self.assertEqual(calls[0][2], checkout)
+            self.assertEqual(calls[0][2], checkout.resolve())
+            self.assertTrue(calls[0][2].is_relative_to((root / 'work').resolve()))
             self.assertIn('Status: Review', wi.read_text(encoding='utf-8'))
 
     def test_technical_retry_rejects_mismatched_resumed_task_without_persisting_it(self):
