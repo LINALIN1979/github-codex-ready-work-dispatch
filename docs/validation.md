@@ -57,9 +57,9 @@ it does not change the closed Ready parser or invent a lifecycle state.
 
 `python -m unittest test_work_items -v`: **3 tests passed**. Creation/promotion,
 malformed or incomplete non-promotion with byte-preserved files, and existing valid
-manual Ready support are covered. The complete suite and static checks will be rerun
-at the branch checkpoint. No host repository, live dispatcher, claims, runner or
-provider was used. WI-005 remains Review.
+manual Ready support are covered. The final stacked suite passed **43 tests in 94.345
+seconds**; hosted run `34295408589` also passed all six CI jobs. No host repository,
+live dispatcher, claims, runner or provider was used. WI-005 remains Review.
 
 ## WI-007 dispatcher role/tier contract analysis — 2026-09-09
 
@@ -72,7 +72,8 @@ supported, and coordinator trust-policy roles are separate.
 
 No code change was manufactured. A possible future host-neutral implementation is only
 described as requiring a separately authorized WI. No live host, runner, provider or
-Codex behavior was exercised. WI-007 remains Review.
+Codex behavior was exercised. Hosted run `34295457841` passed all six CI jobs on the
+final stacked branch. WI-007 remains Review.
 
 ## WI-006 coordinator actor-role authorization binding — 2026-09-09
 
@@ -86,9 +87,10 @@ included.
 `python -m unittest test_actor_role_binding -v`: **3 tests passed**. Tests cover two
 actors/two roles with authorized and cross-pair/forged-role outcomes, disabled-default
 compatibility and legacy single-principal migration versus ambiguous legacy rejection.
-The complete WI-002 coordination suite and static checks are being rerun before this
-branch checkpoint. No live coordination command, host, provider, runner or PR-comment
-execution occurred. WI-006 remains Review.
+The final stacked suite passed **43 tests in 94.345 seconds**; hosted run
+`34295437421` passed all six CI jobs, including the actor-role binding tests. No live
+coordination command, host, provider, runner or PR-comment execution occurred. WI-006
+remains Review.
 
 ## WI-002 original-task review revisions — 2026-09-08
 
