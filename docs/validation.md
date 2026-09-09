@@ -40,9 +40,11 @@ matched its own workflow file, and temporary-path normalization differed between
 weakening the checks: the dedicated scanner excludes only its own workflow and the
 validation record, while all work-root containment comparisons normalize both
 operands. The corrected local suite now passes **37 tests in 102.987 seconds**, including
-the short-path resume regression exposed by the hosted runner. A corrected GitHub-hosted
-run is required before this evidence is complete. The dedicated `ci/check_credentials.py`
-scan and isolated PyYAML 6.0.3 workflow/template validation both pass locally.
+the short-path resume regression exposed by the hosted runner. Corrected GitHub-hosted
+run **34295193351** passed all six jobs: Ubuntu/Windows × Python 3.10/3.14, PowerShell
+and static checks, and workflow/template validation including actionlint v1.7.7. The
+dedicated `ci/check_credentials.py` scan and isolated PyYAML 6.0.3 workflow/template
+validation also pass locally.
 Documentation distinguishes real local/disposable behavior from simulated GitHub/Codex/
 provider behavior and unproven live host behavior. No host repository or live runner was
 modified. WI-004 remains Review.
