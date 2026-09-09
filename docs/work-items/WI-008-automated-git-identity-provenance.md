@@ -1,0 +1,99 @@
+# WI-008 — Automated Git identity provenance
+
+Status: Ready
+Work Type: Design
+Owner Role: Implementer
+Capability Tier: T2 Standard
+
+## Authorization and linked source of truth
+
+Raised from the independent security review of the existing dispatcher baseline on
+2026-09-09. References: `bridge.py`, `setup.ps1`, `docs/coordination.md`, `SECURITY.md`
+and the GitHub attribution model. This is a separate finding and is not part of
+WI-003–WI-007.
+
+## Owner decision — 2026-09-09
+
+The Owner approved the preferred default identity policy. Unless a host explicitly
+configures a dedicated reviewed bot/App identity, every dispatcher-generated Git
+commit uses:
+
+```text
+user.name = github-codex-ready-work-dispatch
+user.email = github-codex-ready-work-dispatch@invalid
+```
+
+The same default applies consistently to Developer/work checkout commits,
+`codex/dispatch-state` commits and coordination-store commits. A dedicated identity
+override must be explicit and must not silently fall back to a personal account.
+
+Git author/committer metadata is provenance only. It is not authorization evidence;
+WI-002 remains separately enforced through command-origin signature, verified GitHub
+actor, actor→role authorization, exact feedback/context checks, durable CAS receipts
+and replay fencing. Provider-specific App authentication is out of scope unless
+explicitly authorized later.
+
+## Goal
+
+Define an intentionally controlled, non-misleading Git author identity for future
+dispatcher-generated commits, without rewriting historical commits or confusing Git
+metadata with authenticated GitHub coordination authority.
+
+## Scope
+
+Inventory every automated commit path and its current `user.name`/`user.email`
+configuration, including work checkouts, the dispatch-state store and the coordination
+store where applicable. Design one consistent default policy that retains a clear
+automation `user.name` and uses a reserved `.invalid` address unless a host explicitly
+configures a dedicated, reviewed bot/App identity. Document opt-in host-specific identity
+requirements, propagation points, migration limits, audit evidence and the distinction
+between Git author/committer metadata and WI-002 authenticated coordinator authority.
+
+## Baseline inventory
+
+The current implementation configures the same personal-account-mappable identity in
+three automated commit paths: `DispatchStore` for `codex/dispatch-state`,
+`CoordinationStore` for the coordination store, and fresh Developer/work checkouts.
+Each currently sets `user.name` to `github-codex-ready-work-dispatch` but sets
+`user.email` to `bridge@users.noreply.github.com`. The approved policy replaces that
+email in all three paths with the reserved `.invalid` address; it does not use either
+Git field as WI-002 authorization evidence.
+
+## Out of scope
+
+No historical commit rewrite, force-push, state/history replacement, host activation,
+live provider/Codex execution, weakening of WI-002 signature/actor/feedback/CAS/replay
+checks, or implementation in WI-003–WI-007.
+
+## Acceptance criteria
+
+- All automated Git identity configuration paths are identified with current behavior.
+- The design compares the preferred reserved `.invalid` default with an explicitly
+  reviewed dedicated bot/App identity, including operational tradeoffs.
+- The selected policy, if any, applies consistently to work, dispatch-state and
+  coordination commits as appropriate, with clear host opt-in rules.
+- Documentation distinguishes Git author metadata from authenticated coordination
+  authority and states that old attribution cannot be retroactively corrected here.
+- The design is independently reviewable and contains no implementation or history
+  rewrite.
+
+## Dependencies and decision gate
+
+The Owner decision above closes the identity-policy decision gate. The design is
+Ready for its separately scoped implementation work, subject to the stated sequence
+after PRs #5–#9. No implementation is added to those PRs.
+
+## Validation / evidence
+
+The baseline finding is the observed configuration of automated repositories/checkouts:
+`user.name = github-codex-ready-work-dispatch` and
+`user.email = bridge@users.noreply.github.com`. No historical attribution is changed
+by this work item, and no live host or GitHub account operation is required for design.
+
+## Results / evidence links
+
+Owner decision recorded: use the reserved `.invalid` identity by default, uniformly
+across work, dispatch-state and coordination commits, with an explicit reviewed bot/App
+override only. Historical commits and attribution are not repaired. The item is ready
+for a focused follow-up implementation PR after the existing stack is integrated;
+that implementation is not part of WI-003–WI-007. Out-of-scope changes: None.
