@@ -47,16 +47,19 @@ review on Draft PR #7; the dependency gate is satisfied for this focused branch.
 
 ## Validation / evidence
 
-Focused `python -m unittest test_actor_role_binding -v`: 3 tests passed. The complete
-suite and static checks are recorded in `docs/validation.md`.
+Focused `python -m unittest test_actor_role_binding -v`: 6 tests passed. The fixture
+executes setup, generated config validation, installed bridge authorization parsing,
+explicit valid/cross-pair outcomes, legacy migration, ambiguous legacy rejection,
+disabled compatibility and whitespace-only binding rejection. The complete suite and
+static checks are recorded in `docs/validation.md`.
 
 ## Results / evidence links
 
 The prior Cartesian-product behavior was confirmed. `trusted_coordination_principals`
 now provides a closed actor-to-role mapping. Legacy enabled configurations remain
 supported only for exactly one actor and one role; ambiguous multi-actor/multi-role
-legacy settings fail closed. Setup accepts repeated `actor=role` bindings and emits
-the explicit mapping. Command data still cannot create authority: authentication is
+legacy settings fail closed. Setup accepts repeated `actor=role` bindings, rejects empty
+roles and emits the explicit mapping at sufficient JSON depth. Command data still cannot create authority: authentication is
 verified separately against the signed GitHub commit actor, then the actor-role pair
 is checked before feedback/context validation and durable acceptance.
 

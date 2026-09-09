@@ -70,12 +70,14 @@ configuration, and deliberately supports legacy configuration only for one actor
 one role. Setup's repeated `actor=role` binding input and migration documentation are
 included.
 
-`python -m unittest test_actor_role_binding -v`: **3 tests passed**. Tests cover two
+`python -m unittest test_actor_role_binding -v`: **6 tests passed**. Tests cover two
 actors/two roles with authorized and cross-pair/forged-role outcomes, disabled-default
 compatibility and legacy single-principal migration versus ambiguous legacy rejection.
-The complete WI-002 coordination suite and static checks are being rerun before this
-branch checkpoint. No live coordination command, host, provider, runner or PR-comment
-execution occurred. WI-006 remains Review.
+The setup→generated JSON→`invoke-dispatch.ps1 -ValidateOnly`→installed bridge parsing
+fixture verifies explicit mappings, both valid pairs, both cross-pairs, legacy support,
+ambiguous legacy rejection, disabled compatibility and whitespace-only binding rejection.
+No live coordination command, host, provider, runner or PR-comment execution occurred.
+WI-006 remains Review.
 
 ## WI-005 review revisions — 2026-09-09
 
