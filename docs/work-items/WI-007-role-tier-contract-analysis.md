@@ -1,6 +1,6 @@
 # WI-007 — Dispatcher role/tier contract analysis
 
-Status: Review
+Status: Done
 Work Type: Documentation
 Owner Role: Docs / Traceability
 Capability Tier: T2 Standard
@@ -65,4 +65,6 @@ documented execution-role or tier contract. A future host-neutral dispatcher, if
 need a separately authorized implementation WI with machine-readable host policy; this
 WI does not expand the current authority boundary or invent that work item.
 
-Out-of-scope changes: None. This work item is Review and is not Done.
+Out-of-scope changes: None. Independent review approved the documentation/decision and
+PR #9 was merged to `main` with merge commit `a6cb78d049e1a3c6ff324a6f6d6efb7356433fcf`
+on 2026-09-09. The lifecycle record is therefore Done.
