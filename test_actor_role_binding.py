@@ -32,18 +32,21 @@ class ActorRoleBindingTests(unittest.TestCase):
     def run_setup_with_array_arguments(self, root, source, host, install, workflow,
                                        parameter, values, extra):
         runner = root / f'run-{workflow}.ps1'
-        quoted_values = ', '.join("'" + str(value).replace("'", "''") + "'" for value in values)
+        def ps_quote(value):
+            return "'" + str(value).replace("'", "''") + "'"
+
+        quoted_values = ', '.join(ps_quote(value) for value in values)
         arguments = [
-            f"-HostRepo '{str(host).replace("'", "''")}'",
+            f"-HostRepo {ps_quote(host)}",
             "-RunnerLabel 'fixture-dispatch'",
-            f"-InstallRoot '{str(install).replace("'", "''")}'",
-            f"-Codex '{str(self.python_exe).replace("'", "''")}'",
-            f"-Python '{str(self.python_exe).replace("'", "''")}'",
+            f"-InstallRoot {ps_quote(install)}",
+            f"-Codex {ps_quote(self.python_exe)}",
+            f"-Python {ps_quote(self.python_exe)}",
             f"-{parameter} @({quoted_values})",
             f"-WorkflowPath '.github/workflows/{workflow}.yml'",
         ] + extra
         runner.write_text(
-            f"& '{str(source / 'setup.ps1').replace("'", "''")}' " + ' '.join(arguments) + '\n',
+            f"& {ps_quote(source / 'setup.ps1')} " + ' '.join(arguments) + '\n',
             encoding='utf-8')
         return self.run_ps(runner)
 
