@@ -45,6 +45,50 @@ class WorkItemAuthorizationTests(unittest.TestCase):
             self.assertIn('Status: Ready', ready)
             self.assertIsNotNone(parse_wi('docs/work-items/' + path.name, ready))
 
+    def test_ready_promotion_preserves_utf8_bom_and_newlines(self):
+        self.require_powershell()
+        content = 'Status: Planned\nOwner Role: Implementer\n## Goal\nDo it\n## Acceptance criteria\n- Works\n'
+        with tempfile.TemporaryDirectory() as temporary:
+            host = Path(temporary)
+            directory = host / 'docs' / 'work-items'
+            directory.mkdir(parents=True)
+            for name, encoding, prefix in (
+                ('WI-010-utf8.md', 'utf-8', b''),
+                ('WI-011-utf8-bom.md', 'utf-8', b'\xef\xbb\xbf'),
+                ('WI-012-crlf.md', 'utf-8', b''),
+            ):
+                value = content.replace('\n', '\r\n') if name.endswith('crlf.md') else content
+                path = directory / name
+                path.write_bytes(prefix + value.encode(encoding))
+                before = path.read_bytes()
+                result = self.run_ps(ROOT / 'mark-ready.ps1', '-HostRepo', host,
+                                     '-WorkItem', name)
+                self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+                after = path.read_bytes()
+                expected = prefix + value.replace('Status: Planned', 'Status: Ready', 1).encode(encoding)
+                with self.subTest(name=name):
+                    self.assertEqual(after, expected)
+                    self.assertEqual(after[:len(prefix)], before[:len(prefix)])
+
+    def test_unsupported_or_invalid_encoding_is_rejected_without_byte_changes(self):
+        self.require_powershell()
+        with tempfile.TemporaryDirectory() as temporary:
+            host = Path(temporary)
+            directory = host / 'docs' / 'work-items'
+            directory.mkdir(parents=True)
+            for name, raw in (
+                ('WI-013-utf16.md', b'\xff\xfeS\x00t\x00a\x00t\x00u\x00s\x00'),
+                ('WI-014-invalid.md', b'Status: Planned\xff\n'),
+            ):
+                path = directory / name
+                path.write_bytes(raw)
+                before = path.read_bytes()
+                result = self.run_ps(ROOT / 'mark-ready.ps1', '-HostRepo', host,
+                                     '-WorkItem', name)
+                with self.subTest(name=name):
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(path.read_bytes(), before)
+
     def test_incomplete_or_malformed_work_item_is_not_promoted(self):
         self.require_powershell()
         with tempfile.TemporaryDirectory() as temporary:
