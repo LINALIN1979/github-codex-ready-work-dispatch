@@ -69,6 +69,19 @@ only `Status: Planned` to `Status: Ready`. Regression coverage proves byte-prese
 promotion for UTF-8 BOM/no-BOM and CRLF, and byte-for-byte preservation on validation
 failure. Bridge Ready eligibility semantics are unchanged.
 
+## WI-004 review revisions — 2026-09-09
+
+`run_revision` again resolves the recorded checkout and allowed work root once, then uses
+the canonical checkout for execution and checkpoint operations. The focused resume test
+now compares canonical identities and asserts canonical containment. The credential scan
+reports only relative path, line number and a bounded type label; a regression fixture
+proves a fake token never appears in serialized stdout/stderr.
+
+`ci/check_diff_range.py` validates full SHAs and checks pull-request base→head, push
+before→head, or first-commit→head for initial/edge pushes using argument-list subprocess
+calls. The workflow fetches complete history and `ci/validate_yaml.py` verifies the
+range-validation wiring. A fresh hosted run is required for these revisions.
+
 ## WI-002 original-task review revisions — 2026-09-08
 
 Baseline remote main: `a9f2673250f73a1cf567b5e5204f16f2ddaede0c`. The accepted ADR-001
