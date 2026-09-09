@@ -60,7 +60,8 @@ Developer task contract and never grant Product, Art, Architecture, lifecycle, m
 scope or acceptance authority. Coordinator roles in WI-006 are a separate trust-policy
 concept and must not be confused with Developer execution roles.
 
-No code change is required. A future host-neutral dispatcher, if ever desired, would
+No code change is required. Revisions in WI-004–WI-006 did not materially change the
+documented execution-role or tier contract. A future host-neutral dispatcher, if ever desired, would
 need a separately authorized implementation WI with machine-readable host policy; this
 WI does not expand the current authority boundary or invent that work item.
 

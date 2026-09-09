@@ -55,10 +55,11 @@ WI-004 is internally validated on Draft PR #6. The implementation changes normal
 `new-work-item.ps1` output to `Planned` and adds explicit `mark-ready.ps1` validation;
 it does not change the closed Ready parser or invent a lifecycle state.
 
-`python -m unittest test_work_items -v`: **3 tests passed**. Creation/promotion,
-malformed or incomplete non-promotion with byte-preserved files, and existing valid
-manual Ready support are covered. The final stacked suite passed **43 tests in 94.345
-seconds**; hosted run `34295408589` also passed all six CI jobs. No host repository,
+`python -m unittest test_work_items -v`: **5 tests passed**. Creation/promotion,
+malformed or incomplete non-promotion with byte-preserved files, UTF-8 BOM/no-BOM,
+CRLF preservation and existing valid manual Ready support are covered. The final
+stacked suite after review revisions passed **50 tests** locally; the final hosted
+run is recorded with the resulting PR head in the review evidence. No host repository,
 live dispatcher, claims, runner or provider was used. WI-005 remains Review.
 
 ## WI-007 dispatcher role/tier contract analysis — 2026-09-09
@@ -70,10 +71,11 @@ host-neutral authority engine. `Implementer`, `Tester / Playtester` and
 capability tiers. README/integration docs now state that arbitrary host roles are not
 supported, and coordinator trust-policy roles are separate.
 
-No code change was manufactured. A possible future host-neutral implementation is only
+No code change was manufactured. Revisions in WI-004–WI-006 did not materially change
+the documented execution-role or tier contract. A possible future host-neutral implementation is only
 described as requiring a separately authorized WI. No live host, runner, provider or
-Codex behavior was exercised. Hosted run `34295457841` passed all six CI jobs on the
-final stacked branch. WI-007 remains Review.
+Codex behavior was exercised. The final hosted run is recorded with the resulting PR
+head in the review evidence. WI-007 remains Review.
 
 ## WI-006 coordinator actor-role authorization binding — 2026-09-09
 
@@ -87,8 +89,10 @@ included.
 `python -m unittest test_actor_role_binding -v`: **6 tests passed**. Tests cover two
 actors/two roles with authorized and cross-pair/forged-role outcomes, disabled-default
 compatibility and legacy single-principal migration versus ambiguous legacy rejection.
-The final stacked suite passed **43 tests in 94.345 seconds**; hosted run
-`34295437421` passed all six CI jobs, including the actor-role binding tests. No live
+The actual setup→generated JSON→installed `-ValidateOnly`→bridge parsing fixture also
+covers both explicit pairs, both cross-pairs and whitespace rejection. The final
+stacked suite after review revisions passed **50 tests** locally; the final hosted run
+is recorded with the resulting PR head in the review evidence. No live
 coordination command, host, provider, runner or PR-comment execution occurred. WI-006
 remains Review.
 
@@ -97,6 +101,14 @@ fixture verifies explicit mappings, both valid pairs, both cross-pairs, legacy s
 ambiguous legacy rejection, disabled compatibility and whitespace-only binding rejection.
 No live coordination command, host, provider, runner or PR-comment execution occurred.
 WI-006 remains Review.
+
+## Required future stacked-PR integration sequence — not performed
+
+Independently approve and merge PR #5 into `main`; retarget PR #6 from the WI-003
+branch to `main`, re-read its diff and obtain fresh CI/review, then merge PR #6;
+retarget PR #7 to `main` and repeat through PR #9. No retarget or merge was performed
+in this review. Merging a PR whose base is another feature branch does not update
+`main` automatically.
 
 ## WI-005 review revisions — 2026-09-09
 
