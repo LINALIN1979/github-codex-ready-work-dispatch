@@ -1,6 +1,6 @@
 # WI-007 — Dispatcher role/tier contract analysis
 
-Status: Planned
+Status: Review
 Work Type: Documentation
 Owner Role: Docs / Traceability
 Capability Tier: T2 Standard
@@ -41,4 +41,28 @@ implementation, live dispatch, host repository changes or manufactured code chan
 
 WI-006 must be internally validated first because its authorization binding affects
 the documented role boundary. This is a documentation/decision work item and needs no
-live dependency. Ready is intentionally withheld until WI-006 is suitable for review.
+live dependency. WI-006 is internally validated and suitable for independent review on
+Draft PR #8; the dependency gate is satisfied for this focused branch.
+
+## Validation / evidence
+
+Analysis is based on `bridge.py`, `README.md`, `SECURITY.md`, `docs/integration.md`,
+`docs/coordination.md` and `docs/MODEL_TIERS.md` from the current dispatcher baseline.
+No live host, runner, provider or Codex fixture is required.
+
+## Results / evidence links
+
+The dispatcher is intentionally Developer-oriented, not completely host-neutral. The
+closed execution-role vocabulary is `Implementer`, `Tester / Playtester` and
+`Docs / Traceability`; unknown Owner Role values are not eligible. Capability tiers
+default to `T2 Standard` and accept only `T1` or `T2` prefixes. These fields select the
+Developer task contract and never grant Product, Art, Architecture, lifecycle, merge,
+scope or acceptance authority. Coordinator roles in WI-006 are a separate trust-policy
+concept and must not be confused with Developer execution roles.
+
+No code change is required. Revisions in WI-004–WI-006 did not materially change the
+documented execution-role or tier contract. A future host-neutral dispatcher, if ever desired, would
+need a separately authorized implementation WI with machine-readable host policy; this
+WI does not expand the current authority boundary or invent that work item.
+
+Out-of-scope changes: None. This work item is Review and is not Done.

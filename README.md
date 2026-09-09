@@ -116,6 +116,12 @@ No. It is the default host-project contract used by this dispatcher. A work item
 
 `Owner Role` defaults to `Implementer`. `Capability Tier` defaults to `T2 Standard`. Projects with stronger governance can add Scope, Out of scope, Dependencies, Validation and linked specifications. The Codex task reads those files when they exist.
 
+The execution contract is intentionally closed and Developer-oriented. `Owner Role` may
+be `Implementer`, `Tester / Playtester` or `Docs / Traceability`; `Capability Tier` may
+only use a `T1` or `T2` prefix. This dispatcher does not claim to support arbitrary host
+roles or host-neutral authority policy. Coordinator authorization roles, when explicitly
+configured, are a separate trust-policy concept.
+
 The current adapter does not treat GitHub Issues, Projects, milestones or labels as authorization.
 
 ## What is the automatic claim?

@@ -1,6 +1,6 @@
 # WI-006 — Coordinator actor-role authorization binding
 
-Status: Review
+Status: Done
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -65,5 +65,7 @@ verified separately against the signed GitHub commit actor, then the actor-role 
 is checked before feedback/context validation and durable acceptance.
 
 Out-of-scope changes: None. Disabled coordination, WI-002 schemas, receipts, exact
-identity checks, same-task resume and replay fences remain in scope and covered. This
-work item is Review and is not Done.
+identity checks, same-task resume and replay fences remain in scope and covered.
+Independent review approved the implementation and PR #8 was merged to `main` with
+merge commit `096d0fc9bb4d0c6124c74be4744a05fcc8a70527` on 2026-09-09. The lifecycle
+record is therefore Done.
