@@ -98,7 +98,11 @@ proves a fake token never appears in serialized stdout/stderr.
 `ci/check_diff_range.py` validates full SHAs and checks pull-request base→head, push
 before→head, or first-commit→head for initial/edge pushes using argument-list subprocess
 calls. The workflow fetches complete history and `ci/validate_yaml.py` verifies the
-range-validation wiring. A fresh hosted run is required for these revisions.
+range-validation wiring. GitHub-hosted run **34298388997** for head
+`3a020d2e7beb797946b852207e37fa220b64d572` passed all six jobs: Ubuntu/Windows ×
+Python 3.10/3.14, PowerShell/static checks and workflow/template validation. This
+run is associated with the revised PR head; no same-commit success claim is made
+for an earlier head.
 
 ## WI-002 original-task review revisions — 2026-09-08
 
