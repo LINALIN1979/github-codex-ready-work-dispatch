@@ -55,8 +55,10 @@ passed for the CI workflow and rendered dispatcher template. Hosted run `3425386
 passed workflow/template validation, actionlint and both Ubuntu jobs, while revealing
 Windows path-normalization and scanner self-match issues. The fixes are on this branch;
 corrected hosted run `34295193351` passed all six jobs, including both Windows Python
-matrix jobs and PowerShell/static checks. The dedicated credential scanner and the
-isolated YAML validator also pass locally. No host
+matrix jobs and PowerShell/static checks. The review revisions then produced head
+`3a020d2e7beb797946b852207e37fa220b64d572`; hosted run `34298388997` for that head
+also passed all six jobs. The dedicated credential scanner and the isolated YAML
+validator also pass locally. No host
 repository, runner, provider or secret was used.
 
 ## Results / evidence links
