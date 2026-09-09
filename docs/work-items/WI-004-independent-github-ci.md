@@ -65,7 +65,9 @@ repository, runner, provider or secret was used.
 runners with `contents: read`. It runs the complete Python suite on 3.10/3.14,
 PowerShell and static checks, PyYAML workflow/template validation and actionlint from
 the pinned v1.7.7 module. `docs/ci.md` records what is real, disposable, simulated or
-unproven. Third-party actions are pinned to immutable commit SHAs; no Codex execution,
+unproven. Review revisions restore canonical resume checkout handling, use a redacting
+credential scanner with regression coverage, and validate complete event-specific diff
+ranges with full history and fixed subprocess arguments. Third-party actions are pinned to immutable commit SHAs; no Codex execution,
 coordination command, SSH key, secret or repository write is configured.
 
 Out-of-scope changes: None. The work item remains Review and is not Done.
