@@ -48,11 +48,16 @@ dependency gate is satisfied for this focused branch.
 ## Validation / evidence
 
 `python -m unittest discover -s . -p 'test_*.py' -v`: 37 tests passed in 94.815
-seconds. Python 3.10 AST, PowerShell AST, `git diff --check` and credential-pattern
-checks passed. With isolated PyYAML 6.0.3, `python ci/validate_yaml.py` passed for the
-CI workflow and rendered dispatcher template. actionlint and the matrix execution on
-GitHub-hosted runners remain pending the Draft PR CI run. No host repository, runner,
-provider or secret was used.
+seconds before the hosted-run compatibility fixes; the corrected branch also passes the
+same suite in 102.987 seconds. Python 3.10 AST, PowerShell AST, `git diff --check` and
+credential-pattern checks passed. With isolated PyYAML 6.0.3, `python ci/validate_yaml.py`
+passed for the CI workflow and rendered dispatcher template. Hosted run `34253865489`
+passed workflow/template validation, actionlint and both Ubuntu jobs, while revealing
+Windows path-normalization and scanner self-match issues. The fixes are on this branch;
+corrected hosted run `34295193351` passed all six jobs, including both Windows Python
+matrix jobs and PowerShell/static checks. The dedicated credential scanner and the
+isolated YAML validator also pass locally. No host
+repository, runner, provider or secret was used.
 
 ## Results / evidence links
 
