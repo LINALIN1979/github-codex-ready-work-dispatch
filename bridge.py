@@ -1359,8 +1359,9 @@ Return the required JSON result. Empty decision fields are allowed only for Revi
 def run_revision(config, root, store, record, command):
     """Resume one exact stopped Review task; never creates a replacement Developer task."""
     wi, attempt = record['wi'], record['attempt_id']
-    folder = Path(record['checkout'])
-    if not folder.resolve().is_relative_to((root / 'work').resolve()):
+    folder = Path(record['checkout']).resolve()
+    work_root = (root / 'work').resolve()
+    if not folder.is_relative_to(work_root):
         raise RuntimeError('Revision checkout outside bridge work directory')
     log_dir = root / 'logs' / attempt
     log_dir.mkdir(parents=True)

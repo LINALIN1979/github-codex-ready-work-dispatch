@@ -84,13 +84,40 @@ configuration, and deliberately supports legacy configuration only for one actor
 one role. Setup's repeated `actor=role` binding input and migration documentation are
 included.
 
-`python -m unittest test_actor_role_binding -v`: **3 tests passed**. Tests cover two
+`python -m unittest test_actor_role_binding -v`: **6 tests passed**. Tests cover two
 actors/two roles with authorized and cross-pair/forged-role outcomes, disabled-default
 compatibility and legacy single-principal migration versus ambiguous legacy rejection.
 The final stacked suite passed **43 tests in 94.345 seconds**; hosted run
 `34295437421` passed all six CI jobs, including the actor-role binding tests. No live
 coordination command, host, provider, runner or PR-comment execution occurred. WI-006
 remains Review.
+
+The setup→generated JSON→`invoke-dispatch.ps1 -ValidateOnly`→installed bridge parsing
+fixture verifies explicit mappings, both valid pairs, both cross-pairs, legacy support,
+ambiguous legacy rejection, disabled compatibility and whitespace-only binding rejection.
+No live coordination command, host, provider, runner or PR-comment execution occurred.
+WI-006 remains Review.
+
+## WI-005 review revisions — 2026-09-09
+
+`mark-ready.ps1` now decodes only strict UTF-8, explicitly rejects UTF-16/UTF-32 and
+invalid byte sequences, and writes the original BOM plus encoded content while changing
+only `Status: Planned` to `Status: Ready`. Regression coverage proves byte-preserving
+promotion for UTF-8 BOM/no-BOM and CRLF, and byte-for-byte preservation on validation
+failure. Bridge Ready eligibility semantics are unchanged.
+
+## WI-004 review revisions — 2026-09-09
+
+`run_revision` again resolves the recorded checkout and allowed work root once, then uses
+the canonical checkout for execution and checkpoint operations. The focused resume test
+now compares canonical identities and asserts canonical containment. The credential scan
+reports only relative path, line number and a bounded type label; a regression fixture
+proves a fake token never appears in serialized stdout/stderr.
+
+`ci/check_diff_range.py` validates full SHAs and checks pull-request base→head, push
+before→head, or first-commit→head for initial/edge pushes using argument-list subprocess
+calls. The workflow fetches complete history and `ci/validate_yaml.py` verifies the
+range-validation wiring. A fresh hosted run is required for these revisions.
 
 ## WI-002 original-task review revisions — 2026-09-08
 
