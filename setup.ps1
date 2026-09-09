@@ -98,7 +98,9 @@ if ($CoordinationRef) {
             if ($binding -notmatch '^(?<actor>[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)=(?<role>[^\r\n]{1,100})$') {
                 throw 'TrustedCoordinatorBinding must look like actor=role.'
             }
-            $principals += [ordered]@{ actor = $Matches.actor; roles = @($Matches.role.Trim()) }
+            $bindingRole = $Matches.role.Trim()
+            if (-not $bindingRole) { throw 'TrustedCoordinatorBinding role must be non-empty.' }
+            $principals += [ordered]@{ actor = $Matches.actor; roles = @($bindingRole) }
         }
     } else {
         if (-not $TrustedCoordinatorActor -or -not $TrustedCoordinatorRole) {
@@ -135,7 +137,7 @@ $config = [ordered]@{
     max_items = 10
 }
 $configPath = Join-Path $installDirectory 'config.json'
-$config | ConvertTo-Json | Set-Content -LiteralPath $configPath -Encoding utf8
+$config | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $configPath -Encoding utf8
 $workflowFullPath = Join-Path $hostPath $WorkflowPath
 $workflowDirectory = Split-Path -Parent $workflowFullPath
 New-Item -ItemType Directory -Force -Path $workflowDirectory | Out-Null
