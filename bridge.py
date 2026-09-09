@@ -22,6 +22,8 @@ import uuid
 
 STATE_REF = 'refs/heads/codex/dispatch-state'
 COORDINATION_FILE = 'coordination.json'
+AUTOMATION_GIT_NAME = 'github-codex-ready-work-dispatch'
+AUTOMATION_GIT_EMAIL = 'github-codex-ready-work-dispatch@invalid'
 ROLES = {'Implementer', 'Tester / Playtester', 'Docs / Traceability'}
 RETRYABLE = {'quota', 'execution_error', 'timeout'}
 SCHEMA = {'type': 'object', 'additionalProperties': False, 'properties': {
@@ -47,6 +49,12 @@ def run(args, cwd=None, input=None, check=True, env=None):
 
 def git(repo, *args, input=None, check=True):
     return run(['git', '-C', str(repo), *args], input=input, check=check)
+
+
+def configure_git_identity(repo):
+    """Configure provenance metadata; never use it as authentication evidence."""
+    git(repo, 'config', 'user.name', AUTOMATION_GIT_NAME)
+    git(repo, 'config', 'user.email', AUTOMATION_GIT_EMAIL)
 
 
 @contextlib.contextmanager
@@ -83,8 +91,7 @@ class Store:
             git(self.path, 'remote', 'add', 'origin', remote)
         if git(self.path, 'remote', 'get-url', 'origin').stdout.strip() != remote:
             raise RuntimeError('Unexpected state-store remote')
-        git(self.path, 'config', 'user.name', 'github-codex-ready-work-dispatch')
-        git(self.path, 'config', 'user.email', 'bridge@users.noreply.github.com')
+        configure_git_identity(self.path)
 
     def read(self):
         refs = git(self.path, 'ls-remote', '--heads', 'origin', STATE_REF).stdout.strip()
@@ -131,8 +138,7 @@ class CoordinationStore:
             git(self.path, 'remote', 'add', 'origin', remote)
         if git(self.path, 'remote', 'get-url', 'origin').stdout.strip() != remote:
             raise RuntimeError('Unexpected coordination-store remote')
-        git(self.path, 'config', 'user.name', 'github-codex-ready-work-dispatch')
-        git(self.path, 'config', 'user.email', 'bridge@users.noreply.github.com')
+        configure_git_identity(self.path)
 
     def read(self):
         refs = git(self.path, 'ls-remote', '--heads', 'origin', self.ref).stdout.strip()
@@ -1277,8 +1283,7 @@ def run_one(config, root, store, record, retry):
         else:
             run(['git', 'clone', '--quiet', '--no-checkout', config['remote'], str(folder)])
             git(folder, 'checkout', '-b', record['branch'], record['base_sha'])
-            git(folder, 'config', 'user.name', 'github-codex-ready-work-dispatch')
-            git(folder, 'config', 'user.email', 'bridge@users.noreply.github.com')
+        configure_git_identity(folder)
         # Populate the host's pinned dependencies for both fresh and resumed work.
         git(folder, 'submodule', 'update', '--init', '--recursive')
         set_status(folder / record['path'], 'In Progress')
@@ -1363,6 +1368,7 @@ def run_revision(config, root, store, record, command):
     work_root = (root / 'work').resolve()
     if not folder.is_relative_to(work_root):
         raise RuntimeError('Revision checkout outside bridge work directory')
+    configure_git_identity(folder)
     log_dir = root / 'logs' / attempt
     log_dir.mkdir(parents=True)
     schema_path = log_dir / 'schema.json'

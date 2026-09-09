@@ -1,5 +1,28 @@
 # Validation — 2026-09-07
 
+## WI-008 automated Git identity provenance — 2026-09-09
+
+The approved default is implemented through one `configure_git_identity` helper:
+`github-codex-ready-work-dispatch` / `github-codex-ready-work-dispatch@invalid`.
+It is used by the dispatch-state store, coordination store and every
+Developer/work-checkout path. This includes fresh checkouts and preserved checkouts
+resumed by both technical retry and review revision. No dedicated bot/App override was
+added; a future override must be an explicit host policy and must not fall back to a
+personal account.
+
+Focused `python -B -m unittest test_git_identity -v`: **6 tests passed**. Disposable
+local Git fixtures verify both stores, a fresh work checkout, a preserved technical
+retry checkout and a preserved review-revision checkout. The retry and revision tests
+observe the approved identity immediately before real checkpoint commits and verify
+that the prior historical commit remains unchanged. A runtime static assertion rejects
+the old email; verified GitHub actor/signature authorization is shown independent of
+local Git identity environment values. The full suite
+`python -B -m unittest discover -s . -p "test_*.py" -v` passed **56 tests**. Existing
+WI-002/WI-006 authentication, actor-role, feedback, context, CAS, same-task and replay
+tests remain unchanged. No live host/provider/Codex execution or historical state
+rewrite occurred.
+WI-008 remains Review.
+
 ## WI-003 source and installation integrity — 2026-09-09
 
 Baseline remote `main`: `1886a4268c9f2e5cf5e917372174c19cb89ba7d5`; focused branch

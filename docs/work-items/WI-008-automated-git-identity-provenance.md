@@ -1,7 +1,7 @@
 # WI-008 — Automated Git identity provenance
 
-Status: Ready
-Work Type: Design
+Status: Review
+Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
 
@@ -85,15 +85,21 @@ after PRs #5–#9. No implementation is added to those PRs.
 
 ## Validation / evidence
 
-The baseline finding is the observed configuration of automated repositories/checkouts:
+The baseline finding was the observed configuration of automated repositories/checkouts:
 `user.name = github-codex-ready-work-dispatch` and
-`user.email = bridge@users.noreply.github.com`. No historical attribution is changed
-by this work item, and no live host or GitHub account operation is required for design.
+`user.email = bridge@users.noreply.github.com`. The implementation now configures the
+approved `.invalid` identity in all three runtime paths, including fresh work checkouts
+and preserved checkouts resumed through both retry and revision flows. No historical
+attribution is changed by this work item, and no live host or GitHub account operation
+is required.
 
 ## Results / evidence links
 
-Owner decision recorded: use the reserved `.invalid` identity by default, uniformly
-across work, dispatch-state and coordination commits, with an explicit reviewed bot/App
-override only. Historical commits and attribution are not repaired. The item is ready
-for a focused follow-up implementation PR after the existing stack is integrated;
-that implementation is not part of WI-003–WI-007. Out-of-scope changes: None.
+Owner decision recorded and implemented: use the reserved `.invalid` identity by
+default, uniformly across work, dispatch-state and coordination commits, with an
+explicit reviewed bot/App override only. Focused implementation tests pass for all
+three paths, including real checkpoint commits from preserved retry/revision checkouts,
+and for runtime absence of the old personal-account-mappable email. The full Python
+suite passes 56 tests. Historical commits and attribution are not repaired. WI-008
+remains Review pending independent review; this implementation is not part of
+WI-003–WI-007. Out-of-scope changes: None.
