@@ -49,6 +49,16 @@ configures a dedicated, reviewed bot/App identity. Document opt-in host-specific
 requirements, propagation points, migration limits, audit evidence and the distinction
 between Git author/committer metadata and WI-002 authenticated coordinator authority.
 
+## Baseline inventory
+
+The current implementation configures the same personal-account-mappable identity in
+three automated commit paths: `DispatchStore` for `codex/dispatch-state`,
+`CoordinationStore` for the coordination store, and fresh Developer/work checkouts.
+Each currently sets `user.name` to `github-codex-ready-work-dispatch` but sets
+`user.email` to `bridge@users.noreply.github.com`. The approved policy replaces that
+email in all three paths with the reserved `.invalid` address; it does not use either
+Git field as WI-002 authorization evidence.
+
 ## Out of scope
 
 No historical commit rewrite, force-push, state/history replacement, host activation,
