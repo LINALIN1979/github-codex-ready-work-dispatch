@@ -61,6 +61,24 @@ manual Ready support are covered. The complete suite and static checks will be r
 at the branch checkpoint. No host repository, live dispatcher, claims, runner or
 provider was used. WI-005 remains Review.
 
+## WI-006 coordinator actor-role authorization binding — 2026-09-09
+
+WI-005 is internally validated on Draft PR #7. The former independent actor and role
+allowlists were confirmed to authorize their Cartesian product. The fix adds explicit
+`trusted_coordination_principals` actor→roles mappings, rejects malformed/conflicting
+configuration, and deliberately supports legacy configuration only for one actor plus
+one role. Setup's repeated `actor=role` binding input and migration documentation are
+included.
+
+`python -m unittest test_actor_role_binding -v`: **6 tests passed**. Tests cover two
+actors/two roles with authorized and cross-pair/forged-role outcomes, disabled-default
+compatibility and legacy single-principal migration versus ambiguous legacy rejection.
+The setup→generated JSON→`invoke-dispatch.ps1 -ValidateOnly`→installed bridge parsing
+fixture verifies explicit mappings, both valid pairs, both cross-pairs, legacy support,
+ambiguous legacy rejection, disabled compatibility and whitespace-only binding rejection.
+No live coordination command, host, provider, runner or PR-comment execution occurred.
+WI-006 remains Review.
+
 ## WI-005 review revisions — 2026-09-09
 
 `mark-ready.ps1` now decodes only strict UTF-8, explicitly rejects UTF-16/UTF-32 and

@@ -274,6 +274,44 @@ def parse_wi(path, text, work_items_path='docs/work-items'):
     return {'wi': match[1], 'path': path, 'role': role, 'tier': tier}
 
 
+def coordination_principal_pairs(config):
+    """Return explicit actor/role pairs; reject ambiguous legacy configuration."""
+    actors = config.get('trusted_coordination_actors', [])
+    roles = config.get('trusted_coordination_roles', [])
+    principals = config.get('trusted_coordination_principals')
+    if principals is None:
+        if (not isinstance(actors, list) or not isinstance(roles, list) or
+                len(actors) != 1 or len(roles) != 1):
+            raise RuntimeError('Legacy coordination trust policy is ambiguous; configure explicit principal pairs')
+        if not _matches(actors[0], ACTOR_RE) or not _bounded_safe_string(roles[0], 100):
+            raise RuntimeError('Legacy coordination trust policy is invalid')
+        return {(actors[0], roles[0])}
+    if not isinstance(principals, list) or not principals:
+        raise RuntimeError('Coordination principal mapping is empty or malformed')
+    pairs = set()
+    for principal in principals:
+        if not isinstance(principal, dict) or set(principal) != {'actor', 'roles'}:
+            raise RuntimeError('Coordination principal mapping is malformed')
+        actor = principal['actor']
+        allowed_roles = principal['roles']
+        if (not _matches(actor, ACTOR_RE) or not isinstance(allowed_roles, list) or
+                not allowed_roles):
+            raise RuntimeError('Coordination principal mapping is malformed')
+        for role in allowed_roles:
+            if not _bounded_safe_string(role, 100):
+                raise RuntimeError('Coordination principal role is invalid')
+            pairs.add((actor, role))
+    legacy_pairs = set()
+    if actors or roles:
+        if (not isinstance(actors, list) or not isinstance(roles, list) or
+                len(actors) != 1 or len(roles) != 1):
+            raise RuntimeError('Legacy and explicit coordination trust policies conflict')
+        legacy_pairs.add((actors[0], roles[0]))
+        if legacy_pairs != pairs:
+            raise RuntimeError('Legacy and explicit coordination trust policies conflict')
+    return pairs
+
+
 def acquire(state, candidate, run_url, retry=False):
     """Pure gate, also exercised under conflicting remote writes in integration tests."""
     state = copy.deepcopy(state)
@@ -898,10 +936,8 @@ def validate_coordination_command(config, command_id, command):
         raise RuntimeError('Coordination command has non-string fields')
     if command['repository'] != config['repository']:
         raise RuntimeError('Coordination command targets another repository')
-    if command['issuer_actor'] not in config.get('trusted_coordination_actors', []):
-        raise RuntimeError('Untrusted coordination actor')
-    if command['active_role'] not in config.get('trusted_coordination_roles', []):
-        raise RuntimeError('Untrusted or forged coordinator role')
+    if (command['issuer_actor'], command['active_role']) not in coordination_principal_pairs(config):
+        raise RuntimeError('Untrusted coordinator actor-role pair')
     if command['authority_ref'] != config.get('coordination_authority_ref', ''):
         raise RuntimeError('Coordinator authority reference mismatch')
     if (not _valid_repository(command['repository']) or
@@ -950,7 +986,7 @@ def verify_coordination_actor(config, revision, command):
                     if isinstance(commit, dict) else None)
     if (not isinstance(commit, dict) or commit.get('sha') != revision or
             author != command['issuer_actor'] or committer != command['issuer_actor'] or
-            author not in config.get('trusted_coordination_actors', []) or
+            not any(actor == author for actor, _ in coordination_principal_pairs(config)) or
             not isinstance(verification, dict) or verification.get('verified') is not True):
         raise RuntimeError('Coordination commit lacks a verified matching actor')
     return author
@@ -1093,8 +1129,7 @@ def process_coordination(config, root, store, command_id):
         raise RuntimeError('Coordination commands are disabled')
     if ref in {STATE_REF, 'refs/heads/' + config.get('base_branch', 'main')}:
         raise RuntimeError('Coordination ref conflicts with lifecycle or execution state')
-    if not config.get('trusted_coordination_actors') or not config.get('trusted_coordination_roles'):
-        raise RuntimeError('Coordination trust policy is incomplete')
+    coordination_principal_pairs(config)
     coordination = CoordinationStore(root / 'coordination.git', config['remote'], ref)
     command_revision, document = coordination.read()
     if command_id in document['receipts']:

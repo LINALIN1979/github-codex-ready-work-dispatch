@@ -43,9 +43,12 @@ if (@($RetryWi, $PublishWi, $CoordinationCommand).Where({ $_ }).Count -gt 1) {
 $settings = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
 $coordinationEnabled = [bool]$settings.coordination_ref
 if ($coordinationEnabled) {
+    $hasExplicitPrincipals = $null -ne $settings.trusted_coordination_principals
+    $hasLegacyTrust = $settings.trusted_coordination_actors -and $settings.trusted_coordination_roles
     if ($settings.coordination_ref -notmatch '^refs/heads/codex/[A-Za-z0-9._/-]+$' -or
         $settings.coordination_ref -eq 'refs/heads/codex/dispatch-state' -or
-        -not $settings.trusted_coordination_actors -or -not $settings.trusted_coordination_roles -or
+        (-not $hasExplicitPrincipals -and -not $hasLegacyTrust) -or
+        ($hasExplicitPrincipals -and -not $settings.trusted_coordination_principals) -or
         -not $settings.coordination_authority_ref) {
         throw 'Coordination configuration is incomplete or unsafe.'
     }

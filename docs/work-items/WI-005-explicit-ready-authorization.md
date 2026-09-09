@@ -1,6 +1,6 @@
 # WI-005 — Safe work-item creation and explicit Ready authorization
 
-Status: Review
+Status: Done
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -61,4 +61,6 @@ bytes. Failed promotion leaves the source file byte-for-byte unchanged. Existing
 manually authored valid Ready items still pass the unchanged `bridge.py` parser.
 
 Out-of-scope changes: None. Ready remains the automatic execution authorization
-boundary; this work item is Review and is not Done.
+boundary. Independent review approved the implementation and PR #7 was merged to
+`main` with merge commit `b9b8e98fd6c6714bfc9168d6a242911c72d9fe9e` on 2026-09-09.
+The lifecycle record is therefore Done.

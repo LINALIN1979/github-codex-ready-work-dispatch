@@ -13,14 +13,28 @@ Run `setup.ps1` with all four coordination options or none of them:
   -HostRepo D:\repos\my-project `
   -RunnerLabel my-project-codex-dispatch `
   -CoordinationRef refs/heads/codex/coordination `
-  -TrustedCoordinatorActor OWNER_LOGIN `
-  -TrustedCoordinatorRole 'Technical Planner' `
+  -TrustedCoordinatorBinding 'OWNER_LOGIN=Technical Planner' `
   -CoordinationAuthorityRef docs/decisions/ADR-NNN.md
 ```
 
 The coordination ref must already exist and contain only `coordination.json`. Keep tokens and
-machine configuration outside Git. Leaving `coordination_ref` empty disables command handling;
-merely pushing or commenting on a PR never invokes it.
+machine configuration outside Git. Each `TrustedCoordinatorBinding` is one explicit
+`actor=role` pair; the dispatcher never treats the actor list and role list as a Cartesian
+product. Leaving `coordination_ref` empty disables command handling; merely pushing or
+commenting on a PR never invokes it.
+
+Legacy enabled configurations with only `trusted_coordination_actors` and
+`trusted_coordination_roles` remain supported only when each contains exactly one value,
+which is interpreted as one pair. Multi-actor or multi-role legacy configurations fail
+closed rather than being silently reinterpreted. Rerun setup with explicit bindings to
+migrate, or author `trusted_coordination_principals` as a closed list of objects such as:
+
+```json
+"trusted_coordination_principals": [
+  {"actor": "alice", "roles": ["Technical Planner"]},
+  {"actor": "bob", "roles": ["Reviewer"]}
+]
+```
 
 ## Document and command schema
 
