@@ -51,7 +51,8 @@ Focused `python -m unittest test_actor_role_binding -v`: 6 tests passed. The fix
 executes setup, generated config validation, installed bridge authorization parsing,
 explicit valid/cross-pair outcomes, legacy migration, ambiguous legacy rejection,
 disabled compatibility and whitespace-only binding rejection. The complete suite and
-static checks are recorded in `docs/validation.md`.
+static checks are recorded in `docs/validation.md`. The operator-path fixture is
+also parsed with the Python 3.10 grammar used by hosted CI.
 
 ## Results / evidence links
 
