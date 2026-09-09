@@ -1,6 +1,6 @@
 # WI-008 — Automated Git identity provenance
 
-Status: Review
+Status: Done
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -79,9 +79,9 @@ checks, or implementation in WI-003–WI-007.
 
 ## Dependencies and decision gate
 
-The Owner decision above closes the identity-policy decision gate. The design is
-Ready for its separately scoped implementation work, subject to the stated sequence
-after PRs #5–#9. No implementation is added to those PRs.
+The Owner decision above closes the identity-policy decision gate. The design was
+implemented only after PRs #5–#9 were integrated. No implementation was added to those
+PRs.
 
 ## Validation / evidence
 
@@ -93,13 +93,23 @@ and preserved checkouts resumed through both retry and revision flows. No histor
 attribution is changed by this work item, and no live host or GitHub account operation
 is required.
 
+Focused `python -B -m unittest test_git_identity -v`: 6 tests passed. The full Python
+suite passed 56 tests. GitHub-hosted CI run `34310841865` passed all six jobs for head
+`04b746fecda9b88abe81926b11d5c744f2be0adb`, including Ubuntu/Windows Python 3.10/3.14,
+PowerShell/static checks, workflow/template validation and actionlint. Retry and revision
+fixtures exercised preserved checkouts, real checkpoint commits, migration to the
+approved identity before new commits, and preservation of historical commits.
+
 ## Results / evidence links
 
 Owner decision recorded and implemented: use the reserved `.invalid` identity by
 default, uniformly across work, dispatch-state and coordination commits, with an
-explicit reviewed bot/App override only. Focused implementation tests pass for all
-three paths, including real checkpoint commits from preserved retry/revision checkouts,
-and for runtime absence of the old personal-account-mappable email. The full Python
-suite passes 56 tests. Historical commits and attribution are not repaired. WI-008
-remains Review pending independent review; this implementation is not part of
-WI-003–WI-007. Out-of-scope changes: None.
+explicit reviewed bot/App override only. Runtime code has no old-email reference;
+historical evidence remains intentionally documented. Git metadata remains provenance
+only and WI-002/WI-006 authentication, actor-role, feedback, context, CAS, same-task and
+replay invariants remain unchanged.
+
+Independent review approved the preserved-checkout migration revision. PR #10 was
+merged to `main` on 2026-09-09 with merge commit
+`f4c1be620b2bd0694a7ca6d89997362c32103043`. Historical commits and attribution were
+not rewritten. Out-of-scope changes: None.
