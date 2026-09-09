@@ -618,7 +618,7 @@ def recover_publication(config, root, store, wi):
     if any(k != wi and r['status'] == 'running' for k, r in state['claims'].items()):
         raise RuntimeError('Another running claim fences publication recovery')
     folder = Path(record['checkout']).resolve()
-    if not folder.is_relative_to(root / 'work') or not folder.exists():
+    if not folder.is_relative_to((root / 'work').resolve()) or not folder.exists():
         raise RuntimeError('Preserved checkout missing or outside work directory')
     if git(folder, 'remote', 'get-url', 'origin').stdout.strip() != config['remote']:
         raise RuntimeError('Unexpected recovery remote')
@@ -1075,7 +1075,7 @@ def validate_coordination_context(config, root, store, command, observations=Non
         raise RuntimeError('Work item changed; command is stale')
 
     folder = Path(record['checkout']).resolve()
-    if not folder.is_relative_to(root / 'work') or not folder.exists():
+    if not folder.is_relative_to((root / 'work').resolve()) or not folder.exists():
         raise RuntimeError('Recovery checkout missing or outside bridge work directory')
     if folder != Path(command['checkout']).resolve():
         raise RuntimeError('Command checkout identity mismatch')
@@ -1257,7 +1257,7 @@ def main():
 def run_one(config, root, store, record, retry):
     wi, attempt = record['wi'], record['attempt_id']
     folder = Path(record['checkout']).resolve()
-    if not folder.is_relative_to(root / 'work'):
+    if not folder.is_relative_to((root / 'work').resolve()):
         raise RuntimeError('Checkout outside bridge work directory')
     log_dir = root / 'logs' / attempt
     log_dir.mkdir(parents=True)
@@ -1359,8 +1359,8 @@ Return the required JSON result. Empty decision fields are allowed only for Revi
 def run_revision(config, root, store, record, command):
     """Resume one exact stopped Review task; never creates a replacement Developer task."""
     wi, attempt = record['wi'], record['attempt_id']
-    folder = Path(record['checkout']).resolve()
-    if not folder.is_relative_to(root / 'work'):
+    folder = Path(record['checkout'])
+    if not folder.resolve().is_relative_to((root / 'work').resolve()):
         raise RuntimeError('Revision checkout outside bridge work directory')
     log_dir = root / 'logs' / attempt
     log_dir.mkdir(parents=True)

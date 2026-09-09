@@ -33,7 +33,18 @@ workflow/template validation and actionlint v1.7.7.
 
 The full local suite passed: **37 tests in 94.815 seconds**. Python 3.10 AST,
 PowerShell AST, `git diff --check`, credential scan and isolated `ci/validate_yaml.py`
-passed. GitHub-hosted matrix execution and actionlint are pending the Draft PR CI run.
+passed. GitHub-hosted run `34253865489` validated the workflow/template job, actionlint
+and both Ubuntu Python jobs, but exposed two Windows-only issues: the credential scan
+matched its own workflow file, and temporary-path normalization differed between
+`Path.resolve()` and an unresolved `Path`. The current branch fixes both without
+weakening the checks: the dedicated scanner excludes only its own workflow and the
+validation record, while all work-root containment comparisons normalize both
+operands. The corrected local suite now passes **37 tests in 102.987 seconds**, including
+the short-path resume regression exposed by the hosted runner. Corrected GitHub-hosted
+run **34295193351** passed all six jobs: Ubuntu/Windows × Python 3.10/3.14, PowerShell
+and static checks, and workflow/template validation including actionlint v1.7.7. The
+dedicated `ci/check_credentials.py` scan and isolated PyYAML 6.0.3 workflow/template
+validation also pass locally.
 Documentation distinguishes real local/disposable behavior from simulated GitHub/Codex/
 provider behavior and unproven live host behavior. No host repository or live runner was
 modified. WI-004 remains Review.
