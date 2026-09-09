@@ -1,6 +1,6 @@
 # WI-008 — Automated Git identity provenance
 
-Status: Planned
+Status: Ready
 Work Type: Design
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -11,6 +11,27 @@ Raised from the independent security review of the existing dispatcher baseline 
 2026-09-09. References: `bridge.py`, `setup.ps1`, `docs/coordination.md`, `SECURITY.md`
 and the GitHub attribution model. This is a separate finding and is not part of
 WI-003–WI-007.
+
+## Owner decision — 2026-09-09
+
+The Owner approved the preferred default identity policy. Unless a host explicitly
+configures a dedicated reviewed bot/App identity, every dispatcher-generated Git
+commit uses:
+
+```text
+user.name = github-codex-ready-work-dispatch
+user.email = github-codex-ready-work-dispatch@invalid
+```
+
+The same default applies consistently to Developer/work checkout commits,
+`codex/dispatch-state` commits and coordination-store commits. A dedicated identity
+override must be explicit and must not silently fall back to a personal account.
+
+Git author/committer metadata is provenance only. It is not authorization evidence;
+WI-002 remains separately enforced through command-origin signature, verified GitHub
+actor, actor→role authorization, exact feedback/context checks, durable CAS receipts
+and replay fencing. Provider-specific App authentication is out of scope unless
+explicitly authorized later.
 
 ## Goal
 
@@ -36,29 +57,21 @@ checks, or implementation in WI-003–WI-007.
 
 ## Acceptance criteria
 
-1. All automated Git identity configuration paths are identified with current behavior.
-2. The design compares the preferred reserved `.invalid` default with an explicitly
-   reviewed dedicated bot/App identity, including operational tradeoffs.
-3. The selected policy, if any, applies consistently to work, dispatch-state and
-   coordination commits as appropriate, with clear host opt-in rules.
-4. Documentation distinguishes Git author metadata from authenticated coordination
-   authority and states that old attribution cannot be retroactively corrected here.
-5. The design is independently reviewable and contains no implementation or history
-   rewrite.
+- All automated Git identity configuration paths are identified with current behavior.
+- The design compares the preferred reserved `.invalid` default with an explicitly
+  reviewed dedicated bot/App identity, including operational tradeoffs.
+- The selected policy, if any, applies consistently to work, dispatch-state and
+  coordination commits as appropriate, with clear host opt-in rules.
+- Documentation distinguishes Git author metadata from authenticated coordination
+  authority and states that old attribution cannot be retroactively corrected here.
+- The design is independently reviewable and contains no implementation or history
+  rewrite.
 
 ## Dependencies and decision gate
 
-This work item is intentionally **Planned**, not Ready. The Owner must choose between:
-
-- **Preferred default:** retain the clear automation name and use a reserved
-  `github-codex-ready-work-dispatch@invalid`-style address; or
-- **Dedicated identity:** require each host to configure a separately reviewed bot/App
-  identity, with no accidental fallback to a personal account.
-
-The Owner must also confirm whether the default is to be applied uniformly to work,
-dispatch-state and coordination stores, or whether a documented exception is needed.
-Until those decisions are recorded, promoting this item to Ready would assume an
-identity policy outside the current implementation authority.
+The Owner decision above closes the identity-policy decision gate. The design is
+Ready for its separately scoped implementation work, subject to the stated sequence
+after PRs #5–#9. No implementation is added to those PRs.
 
 ## Validation / evidence
 
@@ -69,5 +82,8 @@ by this work item, and no live host or GitHub account operation is required for 
 
 ## Results / evidence links
 
-Pending the Owner decision above. No implementation is authorized while this item is
-Planned. Out-of-scope changes: None.
+Owner decision recorded: use the reserved `.invalid` identity by default, uniformly
+across work, dispatch-state and coordination commits, with an explicit reviewed bot/App
+override only. Historical commits and attribution are not repaired. The item is ready
+for a focused follow-up implementation PR after the existing stack is integrated;
+that implementation is not part of WI-003–WI-007. Out-of-scope changes: None.
