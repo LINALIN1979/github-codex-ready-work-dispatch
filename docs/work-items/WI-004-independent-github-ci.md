@@ -1,6 +1,6 @@
 # WI-004 — Independent GitHub-hosted CI
 
-Status: Review
+Status: Done
 Work Type: Code
 Owner Role: Implementer
 Capability Tier: T2 Standard
@@ -72,4 +72,6 @@ credential scanner with regression coverage, and validate complete event-specifi
 ranges with full history and fixed subprocess arguments. Third-party actions are pinned to immutable commit SHAs; no Codex execution,
 coordination command, SSH key, secret or repository write is configured.
 
-Out-of-scope changes: None. The work item remains Review and is not Done.
+Out-of-scope changes: None. Independent review approved the implementation and PR #6
+was merged to `main` with merge commit `ecb00317cdad331c729da7b43a8ac85d386630d6`
+on 2026-09-09. The lifecycle record is therefore Done.
