@@ -2,7 +2,7 @@
 
 Run `setup.ps1 -HostRepo <path> -RunnerLabel <label>`. Setup creates the host workflow and keeps the runtime config outside Git under `%LOCALAPPDATA%\github-codex-ready-work-dispatch`.
 
-The host owns its work items, governance, workflow trigger and results. This public repository owns setup, invocation, claims and execution. The default setup installs a checked local copy. A host may instead pin this repository as a submodule and call its `invoke-dispatch.ps1`; executable files must remain clean in that checkout. In either mode, keep the real host configuration outside Git and pass its local path with `-Config`.
+The host owns its work items, governance, workflow trigger and results. This public repository owns setup, invocation, claims and execution. The default setup installs a checked local copy. Setup must run from the repository root of a clean Git checkout: it fail-closes on changes to `setup.ps1`, `bridge.py`, `invoke-dispatch.ps1` or the workflow template, and the install manifest records the reviewed revision plus material-source hashes. A host may instead pin this repository as a submodule and call its `invoke-dispatch.ps1`; executable files must remain clean in that checkout. In either mode, keep the real host configuration outside Git and pass its local path with `-Config`. Non-Git setup sources are not verified.
 
 Optional coordinator revision commands remain disabled unless the host configures the complete
 dedicated-ref trust policy and explicitly invokes one command ID. They are not activated by PR
