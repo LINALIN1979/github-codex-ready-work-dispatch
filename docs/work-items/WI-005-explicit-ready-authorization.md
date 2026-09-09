@@ -45,8 +45,9 @@ dependency gate is satisfied for this focused branch.
 
 ## Validation / evidence
 
-Focused `python -m unittest test_work_items -v`: 3 tests passed. The complete suite
-and static checks are recorded in `docs/validation.md`.
+Focused `python -m unittest test_work_items -v`: 5 tests passed, including UTF-8
+without BOM, UTF-8 with BOM, CRLF preservation and byte-identical failure paths.
+The complete suite and static checks are recorded in `docs/validation.md`.
 
 ## Results / evidence links
 
