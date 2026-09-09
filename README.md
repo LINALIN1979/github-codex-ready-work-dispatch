@@ -76,13 +76,14 @@ A host may pin this public repository as a Git submodule and call `invoke-dispat
   -Goal "Add the approved export command"
 ```
 
-The generated file is intentionally small:
+The generated file is intentionally small and starts as non-executable `Planned` work:
 
 ```markdown
 # WI-001 — Add export command
 
-Status: Ready
+Status: Planned
 Owner Role: Implementer
+Capability Tier: T2 Standard
 
 ## Goal
 
@@ -94,7 +95,16 @@ Add the approved export command.
 - Relevant tests pass.
 ```
 
-Review the file, then commit and push it. `Ready` is authorization to execute that bounded work. Do not use `Ready` while requirements, dependencies, or owner decisions are unresolved.
+Review the file, then explicitly promote it:
+
+```powershell
+.\mark-ready.ps1 -HostRepo D:\repos\my-project -WorkItem WI-001-add-export-command.md
+```
+
+Promotion validates the filename, Planned status, closed role/tier contract and non-empty
+Goal/Acceptance criteria before changing only the status to `Ready`. Review and commit the
+file after promotion. `Ready` is authorization to execute that bounded work; do not use it
+while requirements, dependencies or owner decisions are unresolved.
 
 ## Is Ready a GitHub standard?
 

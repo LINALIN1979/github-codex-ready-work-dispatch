@@ -49,6 +49,26 @@ Documentation distinguishes real local/disposable behavior from simulated GitHub
 provider behavior and unproven live host behavior. No host repository or live runner was
 modified. WI-004 remains Review.
 
+## WI-005 safe work-item creation and explicit Ready authorization — 2026-09-09
+
+WI-004 is internally validated on Draft PR #6. The implementation changes normal
+`new-work-item.ps1` output to `Planned` and adds explicit `mark-ready.ps1` validation;
+it does not change the closed Ready parser or invent a lifecycle state.
+
+`python -m unittest test_work_items -v`: **3 tests passed**. Creation/promotion,
+malformed or incomplete non-promotion with byte-preserved files, and existing valid
+manual Ready support are covered. The complete suite and static checks will be rerun
+at the branch checkpoint. No host repository, live dispatcher, claims, runner or
+provider was used. WI-005 remains Review.
+
+## WI-005 review revisions — 2026-09-09
+
+`mark-ready.ps1` now decodes only strict UTF-8, explicitly rejects UTF-16/UTF-32 and
+invalid byte sequences, and writes the original BOM plus encoded content while changing
+only `Status: Planned` to `Status: Ready`. Regression coverage proves byte-preserving
+promotion for UTF-8 BOM/no-BOM and CRLF, and byte-for-byte preservation on validation
+failure. Bridge Ready eligibility semantics are unchanged.
+
 ## WI-004 review revisions — 2026-09-09
 
 `run_revision` again resolves the recorded checkout and allowed work root once, then uses
