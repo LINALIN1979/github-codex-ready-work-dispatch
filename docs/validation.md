@@ -61,6 +61,14 @@ manual Ready support are covered. The complete suite and static checks will be r
 at the branch checkpoint. No host repository, live dispatcher, claims, runner or
 provider was used. WI-005 remains Review.
 
+## WI-005 review revisions — 2026-09-09
+
+`mark-ready.ps1` now decodes only strict UTF-8, explicitly rejects UTF-16/UTF-32 and
+invalid byte sequences, and writes the original BOM plus encoded content while changing
+only `Status: Planned` to `Status: Ready`. Regression coverage proves byte-preserving
+promotion for UTF-8 BOM/no-BOM and CRLF, and byte-for-byte preservation on validation
+failure. Bridge Ready eligibility semantics are unchanged.
+
 ## WI-002 original-task review revisions — 2026-09-08
 
 Baseline remote main: `a9f2673250f73a1cf567b5e5204f16f2ddaede0c`. The accepted ADR-001

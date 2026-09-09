@@ -54,9 +54,10 @@ and static checks are recorded in `docs/validation.md`.
 T2 tier. The new `mark-ready.ps1` is a separate explicit operation: it accepts only
 one `Status: Planned` field, a valid dispatcher filename, closed role/tier values,
 exactly one non-empty Goal and Acceptance criteria heading, and a non-empty criteria
-list. It changes only the status after all validation succeeds; failed promotion
-leaves the source file unchanged. Existing manually authored valid Ready items still
-pass the unchanged `bridge.py` parser.
+list. It changes only the status after all validation succeeds; strict UTF-8 decoding
+rejects unsupported or invalid encodings, and promotion preserves BOM/no-BOM and CRLF
+bytes. Failed promotion leaves the source file byte-for-byte unchanged. Existing
+manually authored valid Ready items still pass the unchanged `bridge.py` parser.
 
 Out-of-scope changes: None. Ready remains the automatic execution authorization
 boundary; this work item is Review and is not Done.
