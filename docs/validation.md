@@ -37,11 +37,12 @@ passed. GitHub-hosted run `34253865489` validated the workflow/template job, act
 and both Ubuntu Python jobs, but exposed two Windows-only issues: the credential scan
 matched its own workflow file, and temporary-path normalization differed between
 `Path.resolve()` and an unresolved `Path`. The current branch fixes both without
-weakening the checks: the scanner excludes only its own workflow and preserves the
-nonzero-error handling, while all work-root containment comparisons normalize both
+weakening the checks: the dedicated scanner excludes only its own workflow and the
+validation record, while all work-root containment comparisons normalize both
 operands. The corrected local suite now passes **37 tests in 102.987 seconds**, including
 the short-path resume regression exposed by the hosted runner. A corrected GitHub-hosted
-run is required before this evidence is complete.
+run is required before this evidence is complete. The dedicated `ci/check_credentials.py`
+scan and isolated PyYAML 6.0.3 workflow/template validation both pass locally.
 Documentation distinguishes real local/disposable behavior from simulated GitHub/Codex/
 provider behavior and unproven live host behavior. No host repository or live runner was
 modified. WI-004 remains Review.

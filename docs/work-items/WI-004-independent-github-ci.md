@@ -54,7 +54,8 @@ credential-pattern checks passed. With isolated PyYAML 6.0.3, `python ci/validat
 passed for the CI workflow and rendered dispatcher template. Hosted run `34253865489`
 passed workflow/template validation, actionlint and both Ubuntu jobs, while revealing
 Windows path-normalization and scanner self-match issues. The fixes are on this branch;
-a new GitHub-hosted matrix run is the remaining independent validation gate. No host
+a new GitHub-hosted matrix run is the remaining independent validation gate. The dedicated
+credential scanner and the isolated YAML validator also pass locally. No host
 repository, runner, provider or secret was used.
 
 ## Results / evidence links
