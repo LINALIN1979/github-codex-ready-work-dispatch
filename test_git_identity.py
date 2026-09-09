@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -8,13 +7,15 @@ import unittest
 from unittest.mock import patch
 
 import bridge
-from bridge import CoordinationStore, Store, run_one, verify_coordination_actor
+from bridge import (CoordinationStore, Store, run_one, run_revision,
+                    verify_coordination_actor)
 
 
 ROOT = Path(__file__).resolve().parent
 OLD_EMAIL = 'bridge@users.noreply.github.com'
 EXPECTED_NAME = 'github-codex-ready-work-dispatch'
 EXPECTED_EMAIL = 'github-codex-ready-work-dispatch@invalid'
+TASK = '11111111-1111-4111-8111-111111111111'
 
 
 def git_config(repo, key):
@@ -49,6 +50,35 @@ def make_host_remote(root):
     base = subprocess.run(['git', '-C', str(seed), 'rev-parse', 'HEAD'], check=True,
                           capture_output=True, text=True).stdout.strip()
     return remote, base
+
+
+def prepare_preserved_checkout(root, remote, base, directory, branch):
+    checkout = root / 'work' / directory
+    subprocess.run(['git', 'clone', '--quiet', str(remote), str(checkout)], check=True,
+                   capture_output=True, text=True)
+    subprocess.run(['git', '-C', str(checkout), 'checkout', '-b', branch, base], check=True,
+                   capture_output=True, text=True)
+    subprocess.run(['git', '-C', str(checkout), 'config', 'user.name', EXPECTED_NAME],
+                   check=True)
+    subprocess.run(['git', '-C', str(checkout), 'config', 'user.email', OLD_EMAIL], check=True)
+    item = checkout / 'docs' / 'work-items' / 'WI-008-automated-git-identity-provenance.md'
+    item.write_text('# WI-008\n\nStatus: Review\n', encoding='utf-8')
+    (checkout / 'stopped.txt').write_text('preserved historical work\n', encoding='utf-8')
+    subprocess.run(['git', '-C', str(checkout), 'add', '-A'], check=True)
+    subprocess.run(['git', '-C', str(checkout), 'commit', '-m', 'historical stopped work'],
+                   check=True, capture_output=True, text=True)
+    historical = subprocess.run(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], check=True,
+                                capture_output=True, text=True).stdout.strip()
+    return checkout, historical
+
+
+class FixtureStore:
+    def __init__(self, path):
+        self.path = path
+        self.patches = []
+
+    def patch(self, wi, attempt, **fields):
+        self.patches.append((wi, attempt, fields))
 
 
 class GitIdentityTests(unittest.TestCase):
@@ -116,6 +146,141 @@ class GitIdentityTests(unittest.TestCase):
                     patch('bridge.publish_result'), patch('bridge.set_status'):
                 run_one(config, root, store, record, False)
             self.assert_identity(Path(record['checkout']))
+
+    def test_retry_migrates_preserved_checkout_before_real_checkpoints(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            remote, base = make_host_remote(root)
+            (root / 'work').mkdir()
+            checkout, historical = prepare_preserved_checkout(
+                root, remote, base, 'retry', 'codex/wi-008-retry')
+            store = FixtureStore(root / 'store.git')
+            record = {
+                'wi': 'WI-008',
+                'path': 'docs/work-items/WI-008-automated-git-identity-provenance.md',
+                'attempt_id': 'b' * 32,
+                'thread_id': TASK,
+                'checkout': str(checkout),
+                'branch': 'codex/wi-008-retry',
+                'base_sha': base,
+                'role': 'Implementer',
+                'tier': 'T2 Standard',
+                'run_url': 'fixture:retry',
+            }
+            config = {'remote': str(remote), 'repository': 'fixture/repo',
+                      'codex': 'codex.exe', 'base_branch': 'main'}
+            real_git = bridge.git
+            real_checkpoint = bridge.checkpoint
+            checkpoint_emails = []
+
+            def fake_git(repo, *args, **kwargs):
+                if Path(repo) == store.path:
+                    if args == ('rev-parse', 'FETCH_HEAD'):
+                        return completed(base + '\n')
+                    return completed()
+                if args[:1] == ('submodule',):
+                    return completed()
+                return real_git(repo, *args, **kwargs)
+
+            def checkpoint_after_identity(folder, branch, message):
+                checkpoint_emails.append(git_config(folder, 'user.email'))
+                return real_checkpoint(folder, branch, message)
+
+            def fake_execute(command, prompt, folder, log_dir, timeout, on_event, heartbeat):
+                on_event({'type': 'thread.started', 'thread_id': TASK})
+                (log_dir / 'answer.json').write_text(json.dumps({
+                    'outcome': 'Review', 'summary': 'retry fixture', 'validation': 'passed',
+                    'decision_owner': '', 'question': '', 'options_and_tradeoffs': '',
+                    'recommendation': '',
+                }), encoding='utf-8')
+                return 'completed', 0
+
+            with patch('bridge.git', side_effect=fake_git), \
+                    patch('bridge.execute', side_effect=fake_execute), \
+                    patch('bridge.checkpoint', side_effect=checkpoint_after_identity), \
+                    patch('bridge.publish_result'):
+                run_one(config, root, store, record, True)
+            self.assertEqual(checkpoint_emails, [EXPECTED_EMAIL, EXPECTED_EMAIL])
+            self.assertEqual(git_config(checkout, 'user.name'), EXPECTED_NAME)
+            self.assertEqual(git_config(checkout, 'user.email'), EXPECTED_EMAIL)
+            self.assertEqual(
+                subprocess.run(['git', '-C', str(checkout), 'show', '-s', '--format=%H', historical],
+                               check=True, capture_output=True, text=True).stdout.strip(), historical)
+            self.assertEqual(git_config(checkout, 'user.email'), EXPECTED_EMAIL)
+            emails = subprocess.run(
+                ['git', '-C', str(checkout), 'log', '-2', '--format=%ae%x00%ce'],
+                check=True, capture_output=True, text=True).stdout.splitlines()
+            self.assertEqual(emails, [f'{EXPECTED_EMAIL}\x00{EXPECTED_EMAIL}'] * 2)
+
+    def test_revision_migrates_preserved_checkout_before_real_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            remote, base = make_host_remote(root)
+            (root / 'work').mkdir()
+            checkout, historical = prepare_preserved_checkout(
+                root, remote, base, 'revision', 'codex/wi-008-revision')
+            store = FixtureStore(root / 'store.git')
+            record = {
+                'wi': 'WI-008',
+                'path': 'docs/work-items/WI-008-automated-git-identity-provenance.md',
+                'attempt_id': 'c' * 32,
+                'thread_id': TASK,
+                'checkout': str(checkout),
+                'branch': 'codex/wi-008-revision',
+                'base_sha': base,
+                'role': 'Implementer',
+                'tier': 'T2 Standard',
+            }
+            config = {'remote': str(remote), 'repository': 'fixture/repo',
+                      'codex': 'codex.exe', 'base_branch': 'main'}
+            command = {
+                'command_id': 'cmd-001',
+                'feedback_ref': 'https://github.com/fixture/repo/pull/10#issuecomment-101',
+                'feedback_sha256': '0' * 64,
+                'feedback': 'bounded review feedback',
+            }
+            real_git = bridge.git
+            real_checkpoint = bridge.checkpoint
+            checkpoint_emails = []
+
+            def fake_git(repo, *args, **kwargs):
+                if Path(repo) == store.path:
+                    if args == ('rev-parse', 'FETCH_HEAD'):
+                        return completed(base + '\n')
+                    return completed()
+                return real_git(repo, *args, **kwargs)
+
+            def checkpoint_after_identity(folder, branch, message):
+                checkpoint_emails.append(git_config(folder, 'user.email'))
+                return real_checkpoint(folder, branch, message)
+
+            def fake_execute(command_line, prompt, folder, log_dir, timeout, on_event, heartbeat):
+                on_event({'type': 'thread.started', 'thread_id': TASK})
+                (log_dir / 'answer.json').write_text(json.dumps({
+                    'outcome': 'Review', 'summary': 'revision fixture', 'validation': 'passed',
+                    'decision_owner': '', 'question': '', 'options_and_tradeoffs': '',
+                    'recommendation': '',
+                }), encoding='utf-8')
+                return 'completed', 0
+
+            with patch('bridge.git', side_effect=fake_git), \
+                    patch('bridge.execute', side_effect=fake_execute), \
+                    patch('bridge.checkpoint', side_effect=checkpoint_after_identity), \
+                    patch('bridge.publish_result'):
+                run_revision(config, root, store, record, command)
+            self.assertEqual(checkpoint_emails, [EXPECTED_EMAIL])
+            self.assertEqual(git_config(checkout, 'user.name'), EXPECTED_NAME)
+            self.assertEqual(git_config(checkout, 'user.email'), EXPECTED_EMAIL)
+            self.assertEqual(
+                subprocess.run(['git', '-C', str(checkout), 'show', '-s', '--format=%H', historical],
+                               check=True, capture_output=True, text=True).stdout.strip(), historical)
+            self.assertEqual(
+                subprocess.run(['git', '-C', str(checkout), 'show', '-s', '--format=%ae', historical],
+                               check=True, capture_output=True, text=True).stdout.strip(), OLD_EMAIL)
+            self.assertEqual(
+                subprocess.run(['git', '-C', str(checkout), 'log', '-1', '--format=%ae%x00%ce'],
+                               check=True, capture_output=True, text=True).stdout.strip(),
+                f'{EXPECTED_EMAIL}\x00{EXPECTED_EMAIL}')
 
     def test_runtime_code_contains_no_old_identity(self):
         runtime_files = [ROOT / 'bridge.py', ROOT / 'setup.ps1',

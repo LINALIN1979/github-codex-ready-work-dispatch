@@ -88,15 +88,18 @@ after PRs #5–#9. No implementation is added to those PRs.
 The baseline finding was the observed configuration of automated repositories/checkouts:
 `user.name = github-codex-ready-work-dispatch` and
 `user.email = bridge@users.noreply.github.com`. The implementation now configures the
-approved `.invalid` identity in all three runtime paths. No historical attribution is
-changed by this work item, and no live host or GitHub account operation is required.
+approved `.invalid` identity in all three runtime paths, including fresh work checkouts
+and preserved checkouts resumed through both retry and revision flows. No historical
+attribution is changed by this work item, and no live host or GitHub account operation
+is required.
 
 ## Results / evidence links
 
 Owner decision recorded and implemented: use the reserved `.invalid` identity by
 default, uniformly across work, dispatch-state and coordination commits, with an
 explicit reviewed bot/App override only. Focused implementation tests pass for all
-three paths and for runtime absence of the old personal-account-mappable email.
-Historical commits and attribution are not repaired. WI-008 remains Review pending
-independent review; this implementation is not part of WI-003–WI-007. Out-of-scope
-changes: None.
+three paths, including real checkpoint commits from preserved retry/revision checkouts,
+and for runtime absence of the old personal-account-mappable email. The full Python
+suite passes 56 tests. Historical commits and attribution are not repaired. WI-008
+remains Review pending independent review; this implementation is not part of
+WI-003–WI-007. Out-of-scope changes: None.

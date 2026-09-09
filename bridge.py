@@ -1283,7 +1283,7 @@ def run_one(config, root, store, record, retry):
         else:
             run(['git', 'clone', '--quiet', '--no-checkout', config['remote'], str(folder)])
             git(folder, 'checkout', '-b', record['branch'], record['base_sha'])
-            configure_git_identity(folder)
+        configure_git_identity(folder)
         # Populate the host's pinned dependencies for both fresh and resumed work.
         git(folder, 'submodule', 'update', '--init', '--recursive')
         set_status(folder / record['path'], 'In Progress')
@@ -1368,6 +1368,7 @@ def run_revision(config, root, store, record, command):
     work_root = (root / 'work').resolve()
     if not folder.is_relative_to(work_root):
         raise RuntimeError('Revision checkout outside bridge work directory')
+    configure_git_identity(folder)
     log_dir = root / 'logs' / attempt
     log_dir.mkdir(parents=True)
     schema_path = log_dir / 'schema.json'
