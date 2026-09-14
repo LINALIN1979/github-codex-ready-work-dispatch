@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import textwrap
 import uuid
 from unittest.mock import patch
 
@@ -156,8 +157,9 @@ class CoordinationCommandTests(unittest.TestCase):
         return command
 
     def test_protected_work_item_contract_allows_execution_wording_only(self):
-        original = '''Status: Blocked
-Work Type: Test
+        original = textwrap.dedent('''\
+            Status: Blocked
+            Work Type: Test
 Owner Role: Tester / Playtester
 Capability Tier: T1 Fast
 
@@ -183,8 +185,8 @@ Runner is validated.
 
 ## Validation / evidence
 
-Developer asks the host for runner status.
-'''
+            Developer asks the host for runner status.
+            ''')
         clarified = original.replace(
             'Developer asks the host for runner status.',
             'The bridge owns host-only runner verification.')
