@@ -190,3 +190,8 @@ Disable the GitHub workflow or stop the runner. Keep the local data directory an
 - `docs/coordination.md` — optional original-task revision operator contract.
 
 No third-party Python package is required.
+
+
+## Owner-approved snapshot continuation
+
+An Owner continuation remains a one-time continuation of the exact blocked task, branch and Draft PR. A command may bind both its preserved blocked snapshot and one current snapshot only when the Dispatcher proves the protected work-item contract is unchanged: Work Type, Owner Role, Capability Tier, Goal, Acceptance criteria, Scope, Out of scope and Dependencies. This supports approved execution/evidence clarifications without opening general blocked retries or requirement changes.
