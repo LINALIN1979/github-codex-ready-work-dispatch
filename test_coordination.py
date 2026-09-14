@@ -137,6 +137,93 @@ class CoordinationCommandTests(unittest.TestCase):
                     self.assertRaises(RuntimeError):
                 verify_coordination_actor(self.config, HEAD, self.command)
 
+    def owner_command(self, **overrides):
+        rationale = 'The blocked result was technical; unchanged approved work may resume.'
+        command = dict(self.command, action='owner_continue_blocked', feedback_ref='', feedback='',
+                       feedback_sha256=hashlib.sha256(b'').hexdigest(),
+                       continuation_rationale=rationale,
+                       continuation_sha256=hashlib.sha256(rationale.encode()).hexdigest())
+        command.update(overrides)
+        return command
+
+    def test_owner_continuation_requires_dedicated_allowlist_and_evidence(self):
+        command = self.owner_command()
+        with self.assertRaises(RuntimeError):
+            validate_coordination_command(self.config, 'cmd-001', command)
+        config = dict(self.config, blocked_continuation_principals=[
+            {'actor': 'owner', 'roles': ['Technical Planner']}])
+        self.assertIs(validate_coordination_command(config, 'cmd-001', command), command)
+        self.assertEqual(verify_feedback(config, command),
+                         {'feedback_kind': None, 'feedback_id': None})
+        for fields in ({'continuation_rationale': ''}, {'continuation_sha256': '0' * 64},
+                       {'feedback': 'untrusted comment'}, {'pr_number': 0}):
+            with self.subTest(fields=fields), self.assertRaises(RuntimeError):
+                validate_coordination_command(config, 'cmd-001', self.owner_command(**fields))
+
+    def test_owner_continuation_claims_exact_blocked_attempt_once(self):
+        command = self.owner_command()
+        config = dict(self.config, coordination_ref='refs/heads/codex/coordination',
+                      blocked_continuation_principals=[
+                          {'actor': 'owner', 'roles': ['Technical Planner']}])
+        old = {'wi': 'WI-001', 'path': command['wi_path'], 'attempt_id': ATTEMPT,
+               'thread_id': TASK, 'branch': 'codex/test', 'checkout': 'saved',
+               'pr_number': 7, 'result_commit': HEAD, 'status': 'blocked', 'history': []}
+        state = {'schema_version': 1, 'paused': {'wi': 'WI-001'}, 'claims': {'WI-001': old}}
+        store = FakeStateStore(state)
+
+        class FakeCoordination:
+            receipt = None
+            def read(self):
+                return HEAD, {'schema_version': 1, 'commands': {'cmd-001': command},
+                              'receipts': {} if self.receipt is None else {'cmd-001': self.receipt}}
+            def command_origin(self, *args): return HEAD
+            def accept(self, *args):
+                if self.receipt: return None
+                self.receipt = {'status': 'accepted'}
+                return self.receipt
+            def reject(self, *args): raise AssertionError('valid Owner continuation rejected')
+            def finish(self, command_id, status, **evidence): self.receipt = {'status': status}
+
+        coordination = FakeCoordination()
+        observed = full_observations(command, claim_status='blocked', feedback_kind=None,
+                                     feedback_id=None, continuation_sha256=command['continuation_sha256'])
+        with patch('bridge.CoordinationStore', return_value=coordination), \
+                patch('bridge.verify_coordination_actor', return_value='owner'), \
+                patch('bridge.validate_coordination_context', return_value=(HEAD, state, old)), \
+                patch('bridge.coordination_observations', return_value=observed), \
+                patch('bridge.run_one') as resume:
+            process_coordination(config, Path('root'), store, 'cmd-001')
+            process_coordination(config, Path('root'), store, 'cmd-001')
+        self.assertEqual(resume.call_count, 1)
+        record = store.state['claims']['WI-001']
+        self.assertEqual(record['status'], 'running')
+        self.assertNotEqual(record['attempt_id'], ATTEMPT)
+        self.assertEqual((record['thread_id'], record['branch'], record['pr_number']),
+                         (TASK, 'codex/test', 7))
+        self.assertEqual(record['history'][-1]['status'], 'blocked')
+
+    def test_owner_continuation_context_rejects_nonblocked_and_identity_drift(self):
+        command = self.owner_command()
+        config = dict(self.config, blocked_continuation_principals=[
+            {'actor': 'owner', 'roles': ['Technical Planner']}])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkout = root / 'work' / 'saved'
+            checkout.mkdir(parents=True)
+            old = {'wi': 'WI-001', 'path': command['wi_path'], 'attempt_id': ATTEMPT,
+                   'thread_id': TASK, 'checkout': str(checkout), 'branch': 'codex/test',
+                   'wi_blob': BLOB, 'base_sha': BASE, 'pr_number': 7,
+                   'result_commit': HEAD, 'status': 'blocked'}
+            command['checkout'] = str(checkout)
+            store = FakeStateStore({'schema_version': 1, 'paused': None, 'claims': {'WI-001': old}})
+            with patch('bridge.git', return_value=completed('')):
+                for changed in ('review', 'quota'):
+                    with self.subTest(status=changed), self.assertRaises(RuntimeError):
+                        changed_store = FakeStateStore(
+                            {'schema_version': 1, 'paused': None,
+                             'claims': {'WI-001': dict(old, status=changed)}})
+                        validate_coordination_context(config, root, changed_store, command)
+
     def test_technical_retry_with_pr_processes_verified_feedback_once(self):
         command = dict(self.command, action='technical_retry')
         config = dict(self.config, coordination_ref='refs/heads/codex/coordination')
@@ -550,6 +637,24 @@ class CoordinationStoreTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(RuntimeError):
                 validate_receipt('cmd-1', changed)
 
+    def test_owner_continuation_receipt_keeps_digest_not_rationale(self):
+        rationale = 'A technical boundary caused the Blocked outcome; unchanged work may resume.'
+        command = dict(self.command(), action='owner_continue_blocked', feedback_ref='', feedback='',
+                       feedback_sha256=hashlib.sha256(b'').hexdigest(),
+                       continuation_rationale=rationale,
+                       continuation_sha256=hashlib.sha256(rationale.encode()).hexdigest())
+        observed = full_observations(command, claim_status='blocked', feedback_kind=None,
+                                     feedback_id=None, continuation_sha256=command['continuation_sha256'])
+        receipt = CoordinationStore._receipt('cmd-1', 'accepted', HEAD, observed, True)
+        self.assertIs(validate_receipt('cmd-1', receipt), receipt)
+        self.assertNotIn(rationale, json.dumps(receipt))
+        for field, value in (('continuation_sha256', None), ('claim_status', 'review'),
+                             ('feedback_ref', 'https://github.com/fixture/repo/pull/7#issuecomment-1')):
+            malformed = copy.deepcopy(receipt)
+            malformed['observed'][field] = value
+            with self.subTest(field=field), self.assertRaises(RuntimeError):
+                validate_receipt('cmd-1', malformed)
+
     def test_command_receipt_is_at_most_once_and_command_is_immutable(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -560,6 +665,7 @@ class CoordinationStoreTests(unittest.TestCase):
             run(['git', 'init', str(seed)])
             git(seed, 'config', 'user.name', 'Test')
             git(seed, 'config', 'user.email', 'test@example.invalid')
+            git(seed, 'config', 'commit.gpgsign', 'false')
             command = self.command()
             rejected_command = {
                 'schema_version': 99, 'checkout': 'secret-local-path',

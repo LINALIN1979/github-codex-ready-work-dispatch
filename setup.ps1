@@ -15,6 +15,7 @@ param(
     [string[]]$TrustedCoordinatorActor = @(),
     [string[]]$TrustedCoordinatorRole = @(),
     [string[]]$TrustedCoordinatorBinding = @(),
+    [string[]]$BlockedContinuationBinding = @(),
     [string]$CoordinationAuthorityRef = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -82,6 +83,7 @@ $codexVersion = (& $Codex --version).Trim()
 if ($LASTEXITCode -ne 0) { throw 'Codex version check failed.' }
 $pythonVersion = (& $Python --version).Trim()
 if ($LASTEXITCode -ne 0) { throw 'Python version check failed.' }
+$blockedContinuationPrincipals = @()
 if ($CoordinationRef) {
     if ($CoordinationRef -notmatch '^refs/heads/codex/[A-Za-z0-9._/-]+$' -or $CoordinationRef -eq 'refs/heads/codex/dispatch-state') {
         throw 'CoordinationRef must be a dedicated refs/heads/codex/* branch.'
@@ -112,10 +114,20 @@ if ($CoordinationRef) {
         $principals = @([ordered]@{ actor = $TrustedCoordinatorActor[0]; roles = @($TrustedCoordinatorRole[0]) })
     }
     if (-not $principals) { throw 'CoordinationRef requires at least one actor-role binding.' }
+    foreach ($binding in $BlockedContinuationBinding) {
+        if ($binding -notmatch '^(?<actor>[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)=(?<role>[^\r\n]{1,100})$') {
+            throw 'BlockedContinuationBinding must look like actor=role.'
+        }
+        $bindingRole = $Matches.role.Trim()
+        if (-not $bindingRole) { throw 'BlockedContinuationBinding role must be non-empty.' }
+        $blockedContinuationPrincipals += [ordered]@{ actor = $Matches.actor; roles = @($bindingRole) }
+    }
 } elseif ($TrustedCoordinatorActor -or $TrustedCoordinatorRole -or $CoordinationAuthorityRef) {
     throw 'Coordination trust settings require CoordinationRef.'
 } elseif ($TrustedCoordinatorBinding) {
     throw 'Coordination trust settings require CoordinationRef.'
+} elseif ($BlockedContinuationBinding) {
+    throw 'Blocked continuation trust settings require CoordinationRef.'
 }
 $config = [ordered]@{
     repository = $repository
@@ -131,6 +143,7 @@ $config = [ordered]@{
     trusted_coordination_actors = @($TrustedCoordinatorActor)
     trusted_coordination_roles = @($TrustedCoordinatorRole)
     trusted_coordination_principals = @($principals)
+    blocked_continuation_principals = @($blockedContinuationPrincipals)
     coordination_authority_ref = $CoordinationAuthorityRef
     task_seconds = 2700
     batch_seconds = 14400

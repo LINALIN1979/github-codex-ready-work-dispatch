@@ -318,6 +318,25 @@ def coordination_principal_pairs(config):
     return pairs
 
 
+def blocked_continuation_principal_pairs(config):
+    """Return the separately configured Owner continuation actor/role pairs."""
+    principals = config.get('blocked_continuation_principals')
+    if not isinstance(principals, list) or not principals:
+        raise RuntimeError('Blocked continuation is disabled or its principal mapping is malformed')
+    pairs = set()
+    for principal in principals:
+        if not isinstance(principal, dict) or set(principal) != {'actor', 'roles'}:
+            raise RuntimeError('Blocked continuation principal mapping is malformed')
+        actor, roles = principal['actor'], principal['roles']
+        if not _matches(actor, ACTOR_RE) or not isinstance(roles, list) or not roles:
+            raise RuntimeError('Blocked continuation principal mapping is malformed')
+        for role in roles:
+            if not _bounded_safe_string(role, 100):
+                raise RuntimeError('Blocked continuation principal role is invalid')
+            pairs.add((actor, role))
+    return pairs
+
+
 def acquire(state, candidate, run_url, retry=False):
     """Pure gate, also exercised under conflicting remote writes in integration tests."""
     state = copy.deepcopy(state)
@@ -649,6 +668,9 @@ COMMAND_FIELDS = {
     'expected_pr_head', 'feedback_ref', 'feedback_sha256', 'feedback',
     'issuer_actor', 'active_role', 'authority_ref', 'created_at',
 }
+OWNER_CONTINUATION_COMMAND_FIELDS = COMMAND_FIELDS | {
+    'continuation_rationale', 'continuation_sha256',
+}
 
 RECEIPT_FIELDS = {
     'schema_version', 'command_id', 'status', 'command_commit', 'recorded_at',
@@ -668,7 +690,7 @@ OBSERVED_FIELDS = {
     'action', 'created_at', 'base_sha', 'attempt_id', 'task_id', 'work_branch', 'pr_number',
     'expected_pr_head', 'feedback_ref', 'feedback_sha256', 'issuer_actor',
     'active_role', 'authority_ref', 'verified_actor', 'feedback_kind',
-    'feedback_id', 'checkout_sha256', 'result_attempt_id', 'result_commit',
+    'feedback_id', 'continuation_sha256', 'checkout_sha256', 'result_attempt_id', 'result_commit',
     'result_pr_number', 'result_pr_status', 'claim_status', 'observed_base_sha',
     'observed_wi_blob', 'observed_checkout_head', 'observed_remote_head',
     'observed_pr_head',
@@ -734,7 +756,7 @@ def _sanitize_observation(field, value):
     validators = {
         'document_revision': lambda item: _matches(item, SHA1_RE),
         'repository': _valid_repository,
-        'action': lambda item: item in {'revise', 'technical_retry'},
+        'action': lambda item: item in {'revise', 'technical_retry', 'owner_continue_blocked'},
         'created_at': _valid_timestamp,
         'wi_path': _valid_wi_path,
         'wi_blob': lambda item: _matches(item, SHA1_RE),
@@ -745,6 +767,7 @@ def _sanitize_observation(field, value):
         'expected_pr_head': lambda item: _matches(item, SHA1_RE),
         'feedback_ref': _valid_feedback_ref,
         'feedback_sha256': lambda item: _matches(item, SHA256_RE),
+        'continuation_sha256': lambda item: _matches(item, SHA256_RE),
         'issuer_actor': lambda item: _matches(item, ACTOR_RE),
         'active_role': lambda item: _bounded_safe_string(item, 100),
         'authority_ref': _valid_authority,
@@ -787,6 +810,7 @@ def coordination_observations(document_revision, command, **verified):
         'expected_pr_head': _sanitize_observation('expected_pr_head', source.get('expected_pr_head')),
         'feedback_ref': _sanitize_observation('feedback_ref', source.get('feedback_ref')),
         'feedback_sha256': _sanitize_observation('feedback_sha256', source.get('feedback_sha256')),
+        'continuation_sha256': _sanitize_observation('continuation_sha256', source.get('continuation_sha256')),
         'issuer_actor': _sanitize_observation('issuer_actor', source.get('issuer_actor')),
         'active_role': _sanitize_observation('active_role', source.get('active_role')),
         'authority_ref': _sanitize_observation('authority_ref', source.get('authority_ref')),
@@ -898,9 +922,20 @@ def validate_receipt(command_id, receipt):
                 observed['observed_checkout_head'] != observed['observed_remote_head'] or
                 (observed['action'] == 'revise' and observed['claim_status'] != 'review') or
                 (observed['action'] == 'technical_retry' and
-                 observed['claim_status'] not in RETRYABLE)):
+                 observed['claim_status'] not in RETRYABLE) or
+                (observed['action'] == 'owner_continue_blocked' and
+                 observed['claim_status'] != 'blocked')):
             raise RuntimeError('Unknown or malformed coordination receipt schema')
-        if observed['pr_number'] > 0:
+        if observed['action'] == 'owner_continue_blocked':
+            if (observed['pr_number'] < 1 or observed['continuation_sha256'] is None or
+                    observed['feedback_sha256'] != hashlib.sha256(b'').hexdigest() or
+                    any(observed[field] is not None for field in
+                        {'feedback_ref', 'feedback_kind', 'feedback_id'})):
+                raise RuntimeError('Unknown or malformed coordination receipt schema')
+            if (observed['expected_pr_head'] is None or observed['observed_pr_head'] !=
+                    observed['expected_pr_head']):
+                raise RuntimeError('Unknown or malformed coordination receipt schema')
+        elif observed['pr_number'] > 0:
             pr_required = {'expected_pr_head', 'feedback_ref', 'feedback_kind',
                            'feedback_id', 'observed_pr_head'}
             if any(observed[field] is None for field in pr_required):
@@ -929,20 +964,27 @@ def validate_receipt(command_id, receipt):
 
 def validate_coordination_command(config, command_id, command):
     """Validate the closed command vocabulary without interpreting feedback text."""
-    if not isinstance(command, dict) or set(command) != COMMAND_FIELDS:
+    if not isinstance(command, dict):
+        raise RuntimeError('Malformed coordination command fields')
+    expected_fields = (OWNER_CONTINUATION_COMMAND_FIELDS
+                       if command.get('action') == 'owner_continue_blocked' else COMMAND_FIELDS)
+    if set(command) != expected_fields:
         raise RuntimeError('Malformed coordination command fields')
     if command.get('schema_version') != 1 or command.get('command_id') != command_id:
         raise RuntimeError('Coordination command identity mismatch')
     if not _matches(command_id, COMMAND_ID_RE):
         raise RuntimeError('Invalid coordination command ID')
-    if command.get('action') not in {'revise', 'technical_retry'}:
+    if command.get('action') not in {'revise', 'technical_retry', 'owner_continue_blocked'}:
         raise RuntimeError('Unsupported coordination action')
-    string_fields = COMMAND_FIELDS - {'schema_version', 'pr_number'}
+    string_fields = expected_fields - {'schema_version', 'pr_number'}
     if any(not isinstance(command.get(field), str) for field in string_fields):
         raise RuntimeError('Coordination command has non-string fields')
     if command['repository'] != config['repository']:
         raise RuntimeError('Coordination command targets another repository')
-    if (command['issuer_actor'], command['active_role']) not in coordination_principal_pairs(config):
+    principals = (blocked_continuation_principal_pairs(config)
+                  if command['action'] == 'owner_continue_blocked'
+                  else coordination_principal_pairs(config))
+    if (command['issuer_actor'], command['active_role']) not in principals:
         raise RuntimeError('Untrusted coordinator actor-role pair')
     if command['authority_ref'] != config.get('coordination_authority_ref', ''):
         raise RuntimeError('Coordinator authority reference mismatch')
@@ -961,6 +1003,15 @@ def validate_coordination_command(config, command_id, command):
         raise RuntimeError('Invalid task or creation identity')
     if type(command['pr_number']) is not int or not 0 <= command['pr_number'] <= 2147483647:
         raise RuntimeError('Invalid PR identity')
+    if command['action'] == 'owner_continue_blocked':
+        rationale = command['continuation_rationale']
+        if (not _bounded_safe_string(rationale, 2000) or
+                command['continuation_sha256'] != hashlib.sha256(rationale.encode('utf-8')).hexdigest() or
+                command['pr_number'] < 1 or not _matches(command['expected_pr_head'], SHA1_RE) or
+                command['feedback_ref'] or command['feedback'] or
+                command['feedback_sha256'] != hashlib.sha256(b'').hexdigest()):
+            raise RuntimeError('Owner continuation requires bounded rationale and exact Draft PR identity')
+        return command
     feedback_identity = parse_feedback_ref(config, command['feedback_ref'])
     empty_retry_feedback = (command['action'] == 'technical_retry' and
                             command['pr_number'] == 0 and not command['feedback_ref'] and
@@ -992,7 +1043,9 @@ def verify_coordination_actor(config, revision, command):
                     if isinstance(commit, dict) else None)
     if (not isinstance(commit, dict) or commit.get('sha') != revision or
             author != command['issuer_actor'] or committer != command['issuer_actor'] or
-            not any(actor == author for actor, _ in coordination_principal_pairs(config)) or
+            (author, command['active_role']) not in
+            (blocked_continuation_principal_pairs(config)
+             if command.get('action') == 'owner_continue_blocked' else coordination_principal_pairs(config)) or
             not isinstance(verification, dict) or verification.get('verified') is not True):
         raise RuntimeError('Coordination commit lacks a verified matching actor')
     return author
@@ -1011,6 +1064,8 @@ def parse_feedback_ref(config, feedback_ref):
 
 
 def verify_feedback(config, command):
+    if command['action'] == 'owner_continue_blocked':
+        return {'feedback_kind': None, 'feedback_id': None}
     if (command['action'] == 'technical_retry' and command['pr_number'] == 0 and
             not command['feedback_ref'] and not command['feedback']):
         return {'feedback_kind': None, 'feedback_id': None}
@@ -1061,7 +1116,7 @@ def validate_coordination_context(config, root, store, command, observations=Non
             raise RuntimeError('Revision expected PR head does not match claim result')
         if state.get('paused'):
             raise RuntimeError('Paused dispatch state blocks ordinary revision')
-    else:
+    elif command['action'] == 'technical_retry':
         if record.get('status') not in RETRYABLE:
             raise RuntimeError('Technical retry requires a stopped retryable claim')
         if state.get('paused') and state['paused'].get('wi') != wi:
@@ -1069,6 +1124,12 @@ def validate_coordination_context(config, root, store, command, observations=Non
         if (command['pr_number'] != (record.get('pr_number') or 0) or
                 command['expected_pr_head'] != (record.get('result_commit') or '')):
             raise RuntimeError('Technical retry PR/result identity mismatch')
+    else:
+        if (record.get('status') != 'blocked' or record.get('pr_number') != command['pr_number'] or
+                record.get('result_commit') != command['expected_pr_head']):
+            raise RuntimeError('Owner continuation requires the exact blocked claim and Draft PR result')
+        if state.get('paused') and state['paused'].get('wi') != wi:
+            raise RuntimeError('Another WI owns the technical pause')
 
     git(store.path, 'fetch', '--quiet', 'origin', 'refs/heads/' + config.get('base_branch', 'main'))
     current_base = git(store.path, 'rev-parse', 'FETCH_HEAD').stdout.strip()
@@ -1121,7 +1182,7 @@ def claim_coordination_execution(store, revision, state, old, command):
     record.pop('pending_publication', None)
     record.update(pr_status='pending', pr_error=None)
     state['claims'][record['wi']] = record
-    if command['action'] == 'technical_retry':
+    if command['action'] in {'technical_retry', 'owner_continue_blocked'}:
         state['paused'] = None
     store.write(revision, state, f'{record["wi"]}: accept coordination command {command["command_id"]}')
     return record
