@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-import textwrap
 import uuid
 from unittest.mock import patch
 
@@ -157,44 +156,37 @@ class CoordinationCommandTests(unittest.TestCase):
         return command
 
     def test_protected_work_item_contract_allows_execution_wording_only(self):
-        original = textwrap.dedent('''\
-            Status: Blocked
-            Work Type: Test
-Owner Role: Tester / Playtester
-Capability Tier: T1 Fast
-
-## Goal
-
-One harmless marker.
-
-## Scope
-
-- Write the marker.
-
-## Out of scope
-
-- No lifecycle mutation.
-
-## Acceptance criteria
-
-1. The marker is exact.
-
-## Dependencies
-
-Runner is validated.
-
-## Validation / evidence
-
-            Developer asks the host for runner status.
-            ''')
+        original = (
+            'Status: Blocked\n'
+            'Work Type: Test\n'
+            'Owner Role: Tester / Playtester\n'
+            'Capability Tier: T1 Fast\n\n'
+            '## Goal\n\n'
+            'One harmless marker.\n\n'
+            '## Scope\n\n'
+            '- Write the marker.\n\n'
+            '## Out of scope\n\n'
+            '- No lifecycle mutation.\n\n'
+            '## Acceptance criteria\n\n'
+            '1. The marker is exact.\n\n'
+            '## Dependencies\n\n'
+            'Runner is validated.\n\n'
+            '## Validation / evidence\n\n'
+            'Developer asks the host for runner status.\n')
         clarified = original.replace(
             'Developer asks the host for runner status.',
             'The bridge owns host-only runner verification.')
         changed_acceptance = clarified.replace('The marker is exact.', 'The marker may vary.')
         self.assertEqual(protected_work_item_contract(original),
                          protected_work_item_contract(clarified))
+        self.assertEqual(protected_work_item_contract(original),
+                         protected_work_item_contract(original.replace('\n', '\r\n')))
         self.assertNotEqual(protected_work_item_contract(original),
                             protected_work_item_contract(changed_acceptance))
+        with self.assertRaises(RuntimeError):
+            protected_work_item_contract(original + '\n## Scope\n\n- Duplicate.\n')
+        with self.assertRaises(RuntimeError):
+            protected_work_item_contract(original.replace('## Dependencies\n\nRunner is validated.\n\n', ''))
 
     def test_owner_continuation_requires_dedicated_allowlist_and_evidence(self):
         command = self.owner_command()
