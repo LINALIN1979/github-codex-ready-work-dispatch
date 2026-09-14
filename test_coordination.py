@@ -8,6 +8,7 @@ import uuid
 from unittest.mock import patch
 
 from bridge import (CoordinationStore, claim_coordination_execution, run_one, run_revision,
+                    run_owner_continuation,
                     coordination_observations, process_coordination,
                     validate_coordination_command, validate_coordination_context,
                     validate_receipt, verify_coordination_actor, verify_feedback)
@@ -191,10 +192,12 @@ class CoordinationCommandTests(unittest.TestCase):
                 patch('bridge.verify_coordination_actor', return_value='owner'), \
                 patch('bridge.validate_coordination_context', return_value=(HEAD, state, old)), \
                 patch('bridge.coordination_observations', return_value=observed), \
-                patch('bridge.run_one') as resume:
+                patch('bridge.run_owner_continuation') as resume, \
+                patch('bridge.run_one') as retry:
             process_coordination(config, Path('root'), store, 'cmd-001')
             process_coordination(config, Path('root'), store, 'cmd-001')
         self.assertEqual(resume.call_count, 1)
+        retry.assert_not_called()
         record = store.state['claims']['WI-001']
         self.assertEqual(record['status'], 'running')
         self.assertNotEqual(record['attempt_id'], ATTEMPT)
@@ -407,6 +410,51 @@ class CoordinationCommandTests(unittest.TestCase):
             self.assertEqual(calls[0][2], checkout.resolve())
             self.assertTrue(calls[0][2].is_relative_to((root / 'work').resolve()))
             self.assertIn('Status: Review', wi.read_text(encoding='utf-8'))
+
+    def test_owner_continuation_resumes_exact_task_without_persisting_rationale(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkout = root / 'work' / 'saved'
+            wi = checkout / 'docs' / 'work-items' / 'WI-001-test.md'
+            wi.parent.mkdir(parents=True)
+            wi.write_text('# WI-001\n\nStatus: Blocked\n', encoding='utf-8')
+            rationale = 'The original host gate was already checked by the Coordinator.'
+            command = self.owner_command(checkout=str(checkout), continuation_rationale=rationale,
+                                         continuation_sha256=hashlib.sha256(rationale.encode()).hexdigest())
+            record = {'wi': 'WI-001', 'path': 'docs/work-items/WI-001-test.md',
+                      'attempt_id': '6' * 32, 'thread_id': TASK, 'checkout': str(checkout),
+                      'branch': 'codex/test', 'base_sha': BASE, 'pr_number': 7}
+            store = FakeStateStore({'schema_version': 1, 'paused': None,
+                                    'claims': {'WI-001': dict(record)}})
+            calls = []
+
+            def fake_execute(cmd, prompt, folder, log_dir, timeout, on_event, heartbeat):
+                calls.append((cmd, prompt, folder))
+                on_event({'type': 'thread.started', 'thread_id': TASK})
+                (log_dir / 'answer.json').write_text(json.dumps({
+                    'outcome': 'Review', 'summary': 'Continued', 'validation': 'Passed',
+                    'decision_owner': '', 'question': '', 'options_and_tradeoffs': '',
+                    'recommendation': ''}), encoding='utf-8')
+                return 'completed', 0
+
+            def fake_git(repo, *args, **kwargs):
+                if args == ('rev-parse', 'FETCH_HEAD'):
+                    return completed(BASE)
+                return completed('')
+
+            with patch('bridge.execute', side_effect=fake_execute), \
+                    patch('bridge.checkpoint', return_value='7' * 40), \
+                    patch('bridge.publish_result'), patch('bridge.git', side_effect=fake_git):
+                run_owner_continuation(self.config, root, store, record, command)
+            self.assertEqual(len(calls), 1)
+            self.assertIn('resume', calls[0][0])
+            self.assertIn(TASK, calls[0][0])
+            self.assertNotIn(rationale, calls[0][0])
+            self.assertIn(rationale, calls[0][1])
+            self.assertEqual(calls[0][2], checkout.resolve())
+            report = checkout / store.state['claims']['WI-001']['result_path']
+            self.assertNotIn(rationale, report.read_text(encoding='utf-8'))
+            self.assertIn(command['continuation_sha256'], report.read_text(encoding='utf-8'))
 
     def test_technical_retry_rejects_mismatched_resumed_task_without_persisting_it(self):
         with tempfile.TemporaryDirectory() as directory:
