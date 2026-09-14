@@ -146,3 +146,8 @@ replacement task, force push, fence clearing, merge or lifecycle approval.
 The same task-identity check applies to `technical_retry`: if Codex reports a different
 `thread.started` ID while resuming a saved task, execution stops and the replacement ID is never
 written to claim state.
+
+
+## Owner-approved snapshot continuation
+
+An Owner continuation remains a one-time continuation of the exact blocked task, branch and Draft PR. A command may bind both its preserved blocked snapshot and one current snapshot only when the Dispatcher proves the protected work-item contract is unchanged: Work Type, Owner Role, Capability Tier, Goal, Acceptance criteria, Scope, Out of scope and Dependencies. This supports approved execution/evidence clarifications without opening general blocked retries or requirement changes.
