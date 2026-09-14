@@ -1110,16 +1110,16 @@ def verify_feedback(config, command):
 def protected_work_item_contract(text):
     """Return immutable requirement-bearing WI content; fail closed if it is incomplete."""
     def field(name):
-        values = re.findall(rf'^{re.escape(name)}:\\s*([^\\r\\n]+)', text, re.M)
+        values = re.findall(rf'^{re.escape(name)}:\s*([^\r\n]+)', text, re.M)
         return values[0].strip() if len(values) == 1 else None
 
     def section(name):
         matches = list(re.finditer(
-            rf'^## {re.escape(name)}[ \\t]*(?:\\r?\\n)(.*?)(?=^## |\\Z)',
+            rf'^## {re.escape(name)}[ \t]*(?:\r?\n)(.*?)(?=^## |\Z)',
             text, re.M | re.S))
         if len(matches) != 1:
             return None
-        return matches[0].group(1).replace('\\r\\n', '\\n').strip()
+        return matches[0].group(1).replace('\r\n', '\n').strip()
 
     fields = tuple(field(name) for name in ('Work Type', 'Owner Role', 'Capability Tier'))
     sections = tuple(section(name) for name in
