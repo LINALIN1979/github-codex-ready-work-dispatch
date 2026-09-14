@@ -932,6 +932,10 @@ def validate_receipt(command_id, receipt):
                 (observed['action'] == 'owner_continue_blocked' and
                  observed['claim_status'] != 'blocked')):
             raise RuntimeError('Unknown or malformed coordination receipt schema')
+        if (observed['action'] != 'owner_continue_blocked' and
+                (observed['observed_base_sha'] != observed['base_sha'] or
+                 observed['observed_wi_blob'] != observed['wi_blob'])):
+            raise RuntimeError('Unknown or malformed coordination receipt schema')
         if observed['action'] == 'owner_continue_blocked':
             if (observed['continuation_base_sha'] is None or
                     observed['continuation_wi_blob'] is None or
