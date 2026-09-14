@@ -19,6 +19,14 @@ clean preserved checkout, then use the GitHub workflow's `retry_wi` input or:
 It resumes the same work branch and saved task if captured. Changed base/WI requires explicit
 coordinator reconciliation first; a product/approval Blocked result is not retryable this way.
 
+For a durable `blocked` claim, the only continuation path is the optional explicit
+`owner_continue_blocked` coordination command, when the host has separately configured
+its Owner continuation principals. It is not an automatic retry: the GitHub-verified
+Owner-signed immutable command must carry a bounded technical rationale digest and match
+the unchanged WI/base, original task, checkout, branch and open Draft PR exactly. It
+preserves the blocked history and resumes the same task once. It cannot authorize changed
+requirements, approvals, product decisions, or a replacement branch/PR/task.
+
 After a crash, check the GitHub run, local logs and entire process tree. Only after proving
 all old processes stopped, preserve/checkpoint legitimate unfinished work and reconcile
 published branch/state. An authorized coordinator may then use Store.read/write CAS to

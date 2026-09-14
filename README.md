@@ -134,6 +134,14 @@ The WI lifecycle remains in its original Markdown file. The internal claim recor
 
 ## Results and retry
 
+Ordinary technical retry remains limited to stopped quota, execution-error and timeout
+claims. An optional, separately configured `owner_continue_blocked` coordination command
+lets a GitHub-verified Owner explicitly resume one exact technical/environment/prompt-boundary
+Blocked result on its original task, branch, checkout and Draft PR. It is one-time per
+immutable command, retains the blocked history, and rejects any changed WI, base or heads.
+It never substitutes for changed requirements, approvals or automatic recovery; see
+[coordination commands](docs/coordination.md) and [recovery](docs/recovery.md).
+
 Successful work is pushed to a dedicated branch and reported as `Review`. The dispatcher never merges it.
 
 Review and Blocked results require a verified Draft PR. Repeated events and technical

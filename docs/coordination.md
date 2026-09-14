@@ -23,6 +23,14 @@ machine configuration outside Git. Each `TrustedCoordinatorBinding` is one expli
 product. Leaving `coordination_ref` empty disables command handling; merely pushing or
 commenting on a PR never invokes it.
 
+`owner_continue_blocked` is separately disabled by default. To enable this narrow,
+manual Owner authorization path, configure a non-empty closed
+`blocked_continuation_principals` list with the same `{actor, roles}` shape as the
+ordinary principal mapping (or pass repeated `-BlockedContinuationBinding actor=role`
+to setup). It is a separate allowlist: ordinary trusted coordinators do not acquire this
+authority. The immutable signed command contains a bounded technical-continuation
+rationale and its SHA-256 digest; it does not rely on a PR review or issue comment.
+
 Legacy enabled configurations with only `trusted_coordination_actors` and
 `trusted_coordination_roles` remain supported only when each contains exactly one value,
 which is interpreted as one pair. Multi-actor or multi-role legacy configurations fail
@@ -76,6 +84,14 @@ Every field is required. `revise` requires the existing open Draft PR and exact 
 claim's current PR/result identity, or zero/empty when none exists. A technical retry without a PR
 uses empty feedback and reference fields plus the SHA-256 of the empty string. Otherwise feedback
 is untrusted data and its immutable GitHub reference, digest and actor are all checked.
+
+`owner_continue_blocked` requires an exact existing Draft PR/head and an exact durable
+`blocked` claim. It revalidates the unchanged WI blob/base, original attempt/task,
+checkout/branch heads, remote branch and Draft PR before a CAS acceptance. It preserves
+the blocked snapshot in claim history and resumes only the original saved task, branch,
+checkout and PR. Receipts retain its digest and sanitized identities, never the rationale
+or local checkout path. Each immutable command ID is one-time; this is not automatic
+retry, changed-scope approval, or a workaround for changed requirements.
 
 Commands are append-only. Mutating or removing a published command fails closed. The dispatcher
 locates the commit that first introduced the command and requires GitHub REST to report the exact
