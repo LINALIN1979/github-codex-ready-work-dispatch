@@ -23,9 +23,12 @@ For a durable `blocked` claim, the only continuation path is the optional explic
 `owner_continue_blocked` coordination command, when the host has separately configured
 its Owner continuation principals. It is not an automatic retry: the GitHub-verified
 Owner-signed immutable command must carry a bounded technical rationale digest and match
-the unchanged WI/base, original task, checkout, branch and open Draft PR exactly. It
-preserves the blocked history and resumes the same task once. It cannot authorize changed
-requirements, approvals, product decisions, or a replacement branch/PR/task.
+the the preserved blocked WI/base, original task, checkout, branch and open Draft PR exactly.
+It may additionally bind one current main/WI snapshot, but only when the Dispatcher compares
+both versions and proves that Work Type, Owner Role, Capability Tier, Goal, Acceptance criteria,
+Scope, Out of scope and Dependencies are byte-for-byte unchanged. It preserves the blocked
+history and resumes the same task once. It cannot authorize changed requirements, approvals,
+product decisions, or a replacement branch/PR/task.
 
 After a crash, check the GitHub run, local logs and entire process tree. Only after proving
 all old processes stopped, preserve/checkpoint legitimate unfinished work and reconcile

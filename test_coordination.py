@@ -10,12 +10,15 @@ from unittest.mock import patch
 from bridge import (CoordinationStore, claim_coordination_execution, run_one, run_revision,
                     run_owner_continuation,
                     coordination_observations, process_coordination,
-                    validate_coordination_command, validate_coordination_context,
-                    validate_receipt, verify_coordination_actor, verify_feedback)
+                    protected_work_item_contract, validate_coordination_command,
+                    validate_coordination_context, validate_receipt,
+                    verify_coordination_actor, verify_feedback)
 
 
 BASE = '1' * 40
 BLOB = '2' * 40
+CONTINUATION_BASE = '5' * 40
+CONTINUATION_BLOB = '6' * 40
 HEAD = '3' * 40
 ATTEMPT = '4' * 32
 TASK = '11111111-1111-4111-8111-111111111111'
@@ -38,6 +41,9 @@ def full_observations(command, revision=HEAD, **overrides):
         'observed_checkout_head': HEAD, 'observed_remote_head': HEAD,
         'observed_pr_head': HEAD,
     }
+    if command.get('action') == 'owner_continue_blocked':
+        verified['observed_base_sha'] = command['continuation_base_sha']
+        verified['observed_wi_blob'] = command['continuation_wi_blob']
     verified.update(overrides)
     return coordination_observations(revision, command, **verified)
 
@@ -143,9 +149,45 @@ class CoordinationCommandTests(unittest.TestCase):
         command = dict(self.command, action='owner_continue_blocked', feedback_ref='', feedback='',
                        feedback_sha256=hashlib.sha256(b'').hexdigest(),
                        continuation_rationale=rationale,
-                       continuation_sha256=hashlib.sha256(rationale.encode()).hexdigest())
+                       continuation_sha256=hashlib.sha256(rationale.encode()).hexdigest(),
+                       continuation_base_sha=CONTINUATION_BASE,
+                       continuation_wi_blob=CONTINUATION_BLOB)
         command.update(overrides)
         return command
+
+    def test_protected_work_item_contract_allows_execution_wording_only(self):
+        original = (
+            'Status: Blocked\n'
+            'Work Type: Test\n'
+            'Owner Role: Tester / Playtester\n'
+            'Capability Tier: T1 Fast\n\n'
+            '## Goal\n\n'
+            'One harmless marker.\n\n'
+            '## Scope\n\n'
+            '- Write the marker.\n\n'
+            '## Out of scope\n\n'
+            '- No lifecycle mutation.\n\n'
+            '## Acceptance criteria\n\n'
+            '1. The marker is exact.\n\n'
+            '## Dependencies\n\n'
+            'Runner is validated.\n\n'
+            '## Validation / evidence\n\n'
+            'Developer asks the host for runner status.\n')
+        clarified = original.replace(
+            'Developer asks the host for runner status.',
+            'The bridge owns host-only runner verification.')
+        changed_acceptance = clarified.replace('The marker is exact.', 'The marker may vary.')
+        contract = protected_work_item_contract(original)
+        self.assertEqual(contract[:3], ('Test', 'Tester / Playtester', 'T1 Fast'))
+        self.assertEqual(contract, protected_work_item_contract(clarified))
+        self.assertEqual(contract,
+                         protected_work_item_contract(original.replace('\n', '\r\n')))
+        self.assertNotEqual(protected_work_item_contract(original),
+                            protected_work_item_contract(changed_acceptance))
+        with self.assertRaises(RuntimeError):
+            protected_work_item_contract(original + '\n## Scope\n\n- Duplicate.\n')
+        with self.assertRaises(RuntimeError):
+            protected_work_item_contract(original.replace('## Dependencies\n\nRunner is validated.\n\n', ''))
 
     def test_owner_continuation_requires_dedicated_allowlist_and_evidence(self):
         command = self.owner_command()
@@ -690,7 +732,8 @@ class CoordinationStoreTests(unittest.TestCase):
         command = dict(self.command(), action='owner_continue_blocked', feedback_ref='', feedback='',
                        feedback_sha256=hashlib.sha256(b'').hexdigest(),
                        continuation_rationale=rationale,
-                       continuation_sha256=hashlib.sha256(rationale.encode()).hexdigest())
+                       continuation_sha256=hashlib.sha256(rationale.encode()).hexdigest(),
+                       continuation_base_sha=BASE, continuation_wi_blob=BLOB)
         observed = full_observations(command, claim_status='blocked', feedback_kind=None,
                                      feedback_id=None, continuation_sha256=command['continuation_sha256'])
         receipt = CoordinationStore._receipt('cmd-1', 'accepted', HEAD, observed, True)

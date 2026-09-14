@@ -669,7 +669,10 @@ COMMAND_FIELDS = {
     'issuer_actor', 'active_role', 'authority_ref', 'created_at',
 }
 OWNER_CONTINUATION_COMMAND_FIELDS = COMMAND_FIELDS | {
-    'continuation_rationale', 'continuation_sha256',
+    # base_sha/wi_blob bind the preserved blocked snapshot. These fields bind
+    # the separately Owner-approved current snapshot.
+    'continuation_rationale', 'continuation_sha256', 'continuation_base_sha',
+    'continuation_wi_blob',
 }
 
 RECEIPT_FIELDS = {
@@ -690,7 +693,8 @@ OBSERVED_FIELDS = {
     'action', 'created_at', 'base_sha', 'attempt_id', 'task_id', 'work_branch', 'pr_number',
     'expected_pr_head', 'feedback_ref', 'feedback_sha256', 'issuer_actor',
     'active_role', 'authority_ref', 'verified_actor', 'feedback_kind',
-    'feedback_id', 'continuation_sha256', 'checkout_sha256', 'result_attempt_id', 'result_commit',
+    'feedback_id', 'continuation_sha256', 'continuation_base_sha', 'continuation_wi_blob',
+    'checkout_sha256', 'result_attempt_id', 'result_commit',
     'result_pr_number', 'result_pr_status', 'claim_status', 'observed_base_sha',
     'observed_wi_blob', 'observed_checkout_head', 'observed_remote_head',
     'observed_pr_head',
@@ -768,6 +772,8 @@ def _sanitize_observation(field, value):
         'feedback_ref': _valid_feedback_ref,
         'feedback_sha256': lambda item: _matches(item, SHA256_RE),
         'continuation_sha256': lambda item: _matches(item, SHA256_RE),
+        'continuation_base_sha': lambda item: _matches(item, SHA1_RE),
+        'continuation_wi_blob': lambda item: _matches(item, SHA1_RE),
         'issuer_actor': lambda item: _matches(item, ACTOR_RE),
         'active_role': lambda item: _bounded_safe_string(item, 100),
         'authority_ref': _valid_authority,
@@ -811,6 +817,8 @@ def coordination_observations(document_revision, command, **verified):
         'feedback_ref': _sanitize_observation('feedback_ref', source.get('feedback_ref')),
         'feedback_sha256': _sanitize_observation('feedback_sha256', source.get('feedback_sha256')),
         'continuation_sha256': _sanitize_observation('continuation_sha256', source.get('continuation_sha256')),
+        'continuation_base_sha': _sanitize_observation('continuation_base_sha', source.get('continuation_base_sha')),
+        'continuation_wi_blob': _sanitize_observation('continuation_wi_blob', source.get('continuation_wi_blob')),
         'issuer_actor': _sanitize_observation('issuer_actor', source.get('issuer_actor')),
         'active_role': _sanitize_observation('active_role', source.get('active_role')),
         'authority_ref': _sanitize_observation('authority_ref', source.get('authority_ref')),
@@ -917,8 +925,6 @@ def validate_receipt(command_id, receipt):
         if observed['command_present'] is not True or any(observed[field] is None for field in required):
             raise RuntimeError('Unknown or malformed coordination receipt schema')
         if (observed['verified_actor'] != observed['issuer_actor'] or
-                observed['observed_base_sha'] != observed['base_sha'] or
-                observed['observed_wi_blob'] != observed['wi_blob'] or
                 observed['observed_checkout_head'] != observed['observed_remote_head'] or
                 (observed['action'] == 'revise' and observed['claim_status'] != 'review') or
                 (observed['action'] == 'technical_retry' and
@@ -926,8 +932,16 @@ def validate_receipt(command_id, receipt):
                 (observed['action'] == 'owner_continue_blocked' and
                  observed['claim_status'] != 'blocked')):
             raise RuntimeError('Unknown or malformed coordination receipt schema')
+        if (observed['action'] != 'owner_continue_blocked' and
+                (observed['observed_base_sha'] != observed['base_sha'] or
+                 observed['observed_wi_blob'] != observed['wi_blob'])):
+            raise RuntimeError('Unknown or malformed coordination receipt schema')
         if observed['action'] == 'owner_continue_blocked':
-            if (observed['pr_number'] < 1 or observed['continuation_sha256'] is None or
+            if (observed['continuation_base_sha'] is None or
+                    observed['continuation_wi_blob'] is None or
+                    observed['observed_base_sha'] != observed['continuation_base_sha'] or
+                    observed['observed_wi_blob'] != observed['continuation_wi_blob'] or
+                    observed['pr_number'] < 1 or observed['continuation_sha256'] is None or
                     observed['feedback_sha256'] != hashlib.sha256(b'').hexdigest() or
                     any(observed[field] is not None for field in
                         {'feedback_ref', 'feedback_kind', 'feedback_id'})):
@@ -1007,6 +1021,8 @@ def validate_coordination_command(config, command_id, command):
         rationale = command['continuation_rationale']
         if (not _bounded_safe_string(rationale, 2000) or
                 command['continuation_sha256'] != hashlib.sha256(rationale.encode('utf-8')).hexdigest() or
+                not _matches(command['continuation_base_sha'], SHA1_RE) or
+                not _matches(command['continuation_wi_blob'], SHA1_RE) or
                 command['pr_number'] < 1 or not _matches(command['expected_pr_head'], SHA1_RE) or
                 command['feedback_ref'] or command['feedback'] or
                 command['feedback_sha256'] != hashlib.sha256(b'').hexdigest()):
@@ -1091,6 +1107,28 @@ def verify_feedback(config, command):
     return {'feedback_kind': kind, 'feedback_id': identity}
 
 
+def protected_work_item_contract(text):
+    """Return immutable requirement-bearing WI content; fail closed if it is incomplete."""
+    def field(name):
+        values = re.findall(rf'^{re.escape(name)}:\s*([^\r\n]+)', text, re.M)
+        return values[0].strip() if len(values) == 1 else None
+
+    def section(name):
+        matches = list(re.finditer(
+            rf'^## {re.escape(name)}[ \t]*(?:\r?\n)(.*?)(?=^## |\Z)',
+            text, re.M | re.S))
+        if len(matches) != 1:
+            return None
+        return matches[0].group(1).replace('\r\n', '\n').strip()
+
+    fields = tuple(field(name) for name in ('Work Type', 'Owner Role', 'Capability Tier'))
+    sections = tuple(section(name) for name in
+                     ('Goal', 'Acceptance criteria', 'Scope', 'Out of scope', 'Dependencies'))
+    if any(value is None for value in fields + sections):
+        raise RuntimeError('Work item contract is incomplete or ambiguous')
+    return fields + sections
+
+
 def validate_coordination_context(config, root, store, command, observations=None):
     observations = observations if observations is not None else {}
     revision, state = store.read()
@@ -1134,11 +1172,25 @@ def validate_coordination_context(config, root, store, command, observations=Non
     git(store.path, 'fetch', '--quiet', 'origin', 'refs/heads/' + config.get('base_branch', 'main'))
     current_base = git(store.path, 'rev-parse', 'FETCH_HEAD').stdout.strip()
     observations['observed_base_sha'] = current_base
-    if current_base != command['base_sha']:
-        raise RuntimeError('Base branch changed; command is stale')
     observed_blob = git(store.path, 'rev-parse', f'{current_base}:{command["wi_path"]}').stdout.strip()
     observations['observed_wi_blob'] = observed_blob
-    if observed_blob != command['wi_blob']:
+    if command['action'] == 'owner_continue_blocked':
+        if current_base != command['continuation_base_sha']:
+            raise RuntimeError('Owner-approved continuation base changed; command is stale')
+        if observed_blob != command['continuation_wi_blob']:
+            raise RuntimeError('Owner-approved continuation work item changed; command is stale')
+        # Only execution/evidence wording may change. Fetch and compare the preserved
+        # original source rather than trusting a self-described rationale.
+        git(store.path, 'fetch', '--quiet', 'origin', command['base_sha'])
+        original_text = git(store.path, 'show',
+                            f'{command["base_sha"]}:{command["wi_path"]}').stdout
+        current_text = git(store.path, 'show',
+                           f'{current_base}:{command["wi_path"]}').stdout
+        if protected_work_item_contract(original_text) != protected_work_item_contract(current_text):
+            raise RuntimeError('Owner continuation cannot change the protected work item contract')
+    elif current_base != command['base_sha']:
+        raise RuntimeError('Base branch changed; command is stale')
+    elif observed_blob != command['wi_blob']:
         raise RuntimeError('Work item changed; command is stale')
 
     folder = Path(record['checkout']).resolve()
@@ -1537,10 +1589,11 @@ def run_owner_continuation(config, root, store, record, command):
     try:
         prompt = f'''Resume the existing Developer task for {record['path']} only as
 {record.get('role', 'Implementer')} at capability tier {record.get('tier', 'T2 Standard')}.
-The Owner authorized one technical continuation. The work item scope and acceptance criteria,
-base, claim, saved task, checkout, branch and Draft PR identities are unchanged and verified by
-the bridge. Re-read repository governance and the unchanged work item before editing. Keep the
-same branch and PR. The supplied continuation rationale is context only, not authority to change
+The Owner authorized one technical continuation. The bridge verified that the protected
+work-item contract (goal, acceptance criteria, scope, role, tier and dependencies) is identical
+between the preserved blocked snapshot and the Owner-approved current snapshot. The original
+claim, saved task, checkout, branch and Draft PR identities remain exact. Re-read repository
+governance and the preserved work item before editing. Keep the same branch and PR. The supplied continuation rationale is context only, not authority to change
 scope. Do not repeat host-only runner, scheduler, or GitHub-gate checks: the bridge and
 Coordinator already own those checks. Do only the existing work item. Do not create a replacement
 task, branch or PR; change lifecycle; merge; mutate dispatcher state; or start unrelated work.
