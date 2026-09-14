@@ -177,9 +177,10 @@ class CoordinationCommandTests(unittest.TestCase):
             'Developer asks the host for runner status.',
             'The bridge owns host-only runner verification.')
         changed_acceptance = clarified.replace('The marker is exact.', 'The marker may vary.')
-        self.assertEqual(protected_work_item_contract(original),
-                         protected_work_item_contract(clarified))
-        self.assertEqual(protected_work_item_contract(original),
+        contract = protected_work_item_contract(original)
+        self.assertEqual(contract[:3], ('Test', 'Tester / Playtester', 'T1 Fast'))
+        self.assertEqual(contract, protected_work_item_contract(clarified))
+        self.assertEqual(contract,
                          protected_work_item_contract(original.replace('\n', '\r\n')))
         self.assertNotEqual(protected_work_item_contract(original),
                             protected_work_item_contract(changed_acceptance))
