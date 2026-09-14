@@ -1114,8 +1114,8 @@ def protected_work_item_contract(text):
         return values[0].strip() if len(values) == 1 else None
 
     def section(name):
-        match = re.search(rf'^## {re.escape(name)}\\s*$(.*?)(?=^## |\\Z)', text,
-                          re.M | re.S)
+        match = re.search(rf'^## {re.escape(name)}[ \\t]*(?:\\r?\\n)(.*?)(?=^## |\\Z)',
+                          text, re.M | re.S)
         if not match:
             return None
         return match.group(1).replace('\\r\\n', '\\n').strip()
