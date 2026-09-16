@@ -46,7 +46,7 @@ function Resolve-CodexDesktopExecutable {
     param([object]$Settings, [string]$ConfigPath)
 
     $desktopRoot = [IO.Path]::GetFullPath(
-        (Join-Path $env:LOCALAPPDATA 'OpenAI\\Codex\\bin')).TrimEnd('\\')
+        (Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\bin')).TrimEnd('\')
     $configured = [string]$Settings.codex
     $configuredPath = if ($configured) {
         [IO.Path]::GetFullPath($configured)
@@ -55,7 +55,7 @@ function Resolve-CodexDesktopExecutable {
     }
     # Only managed Codex Desktop paths are auto-refreshed. A host that deliberately
     # configured a different executable retains its explicit fail-closed behavior.
-    if (-not $configuredPath.StartsWith($desktopRoot + '\\', [StringComparison]::OrdinalIgnoreCase)) {
+    if (-not $configuredPath.StartsWith($desktopRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
         if (-not $configuredPath -or -not (Test-Path -LiteralPath $configuredPath -PathType Leaf)) {
             throw 'Configured Codex executable is missing.'
         }
