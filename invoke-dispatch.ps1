@@ -41,6 +41,53 @@ if (@($RetryWi, $PublishWi, $CoordinationCommand).Where({ $_ }).Count -gt 1) {
     throw 'Choose RetryWi, PublishWi or CoordinationCommand, never more than one.'
 }
 $settings = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
+
+function Resolve-CodexDesktopExecutable {
+    param([object]$Settings, [string]$ConfigPath)
+
+    $desktopRoot = [IO.Path]::GetFullPath(
+        (Join-Path $env:LOCALAPPDATA 'OpenAI\\Codex\\bin')).TrimEnd('\\')
+    $configured = [string]$Settings.codex
+    $configuredPath = if ($configured) {
+        [IO.Path]::GetFullPath($configured)
+    } else {
+        ''
+    }
+    # Only managed Codex Desktop paths are auto-refreshed. A host that deliberately
+    # configured a different executable retains its explicit fail-closed behavior.
+    if (-not $configuredPath.StartsWith($desktopRoot + '\\', [StringComparison]::OrdinalIgnoreCase)) {
+        if (-not $configuredPath -or -not (Test-Path -LiteralPath $configuredPath -PathType Leaf)) {
+            throw 'Configured Codex executable is missing.'
+        }
+        return $configuredPath
+    }
+
+    $candidate = Get-ChildItem -LiteralPath $desktopRoot -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $path = Join-Path $_.FullName 'codex.exe'
+            if (Test-Path -LiteralPath $path -PathType Leaf) { Get-Item -LiteralPath $path }
+        } |
+        Sort-Object LastWriteTime -Descending |
+        ForEach-Object {
+            $version = (& $_.FullName --version 2>$null).Trim()
+            if ($LASTEXITCODE -eq 0 -and $version) {
+                [pscustomobject]@{ Path = $_.FullName; Version = $version }
+            }
+        } |
+        Select-Object -First 1
+
+    if (-not $candidate) {
+        throw 'No runnable Codex Desktop executable was found.'
+    }
+    if ($Settings.codex -ne $candidate.Path -or $Settings.codex_version -ne $candidate.Version) {
+        $Settings.codex = $candidate.Path
+        $Settings.codex_version = $candidate.Version
+        $Settings | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ConfigPath -Encoding utf8
+    }
+    return $candidate.Path
+}
+
+$resolvedCodex = Resolve-CodexDesktopExecutable $settings $Config
 $coordinationEnabled = [bool]$settings.coordination_ref
 if ($coordinationEnabled) {
     $hasExplicitPrincipals = $null -ne $settings.trusted_coordination_principals
@@ -56,7 +103,7 @@ if ($coordinationEnabled) {
     throw 'Coordination commands are disabled in this host config.'
 }
 if ($ValidateOnly) {
-    & $settings.codex --version
+    & $resolvedCodex --version
     if ($LASTEXITCODE -ne 0) { throw 'Codex version check failed.' }
     Write-Output "Dispatcher validated: $dispatcherVersion"
     exit 0
