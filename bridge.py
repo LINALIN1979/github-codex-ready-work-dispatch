@@ -1310,6 +1310,109 @@ def process_coordination(config, root, store, command_id):
         raise
 
 
+
+def _manual_review_resume_actors(config, field):
+    actors = config.get(field)
+    if not isinstance(actors, list) or not actors or any(not _matches(actor, ACTOR_RE) for actor in actors):
+        raise RuntimeError(f'Manual review resume {field} is missing or malformed')
+    return set(actors)
+
+
+def _manual_review_resume_input(value):
+    match = re.fullmatch(r'([1-9]\d{0,9}):([1-9]\d{0,19})', value or '')
+    if not match:
+        raise RuntimeError('Manual review resume must be PR_NUMBER:REVIEW_ID')
+    return int(match.group(1)), match.group(2)
+
+
+def _manual_review_resume_context(config, root, store, pr_number, review_id):
+    """Validate one owner-triggered, head-bound GitHub review before resuming it."""
+    run_id = os.environ.get('GITHUB_RUN_ID', '')
+    if not re.fullmatch(r'\d{1,20}', run_id):
+        raise RuntimeError('Manual review resume requires a GitHub Actions workflow run')
+    owners = _manual_review_resume_actors(config, 'manual_review_resume_owners')
+    reviewers = _manual_review_resume_actors(config, 'manual_review_resume_reviewers')
+    workflow_run = github_api(config, 'GET', f'actions/runs/{run_id}')
+    actor = ((workflow_run.get('actor') or {}).get('login') if isinstance(workflow_run, dict) else None)
+    if (not isinstance(workflow_run, dict) or workflow_run.get('event') != 'workflow_dispatch' or
+            actor not in owners or workflow_run.get('head_branch') != config.get('base_branch', 'main')):
+        raise RuntimeError('Manual review resume workflow identity is not authorized')
+    revision, state = store.read()
+    matches = [record for record in state['claims'].values() if record.get('pr_number') == pr_number]
+    if len(matches) != 1:
+        raise RuntimeError('Manual review resume PR claim is missing or ambiguous')
+    old = matches[0]
+    wi = old.get('wi')
+    if (not wi or old.get('status') != 'review' or state.get('paused') or
+            any(key != wi and record.get('status') == 'running' for key, record in state['claims'].items())):
+        raise RuntimeError('Manual review resume requires one stopped Review claim')
+    if not _valid_uuid(old.get('thread_id')) or not _valid_branch(old.get('branch')):
+        raise RuntimeError('Manual review resume claim task identity is invalid')
+    git(store.path, 'fetch', '--quiet', 'origin', 'refs/heads/' + config.get('base_branch', 'main'))
+    current_base = git(store.path, 'rev-parse', 'FETCH_HEAD').stdout.strip()
+    if workflow_run.get('head_sha') != current_base:
+        raise RuntimeError('Manual review resume workflow is stale')
+    original = git(store.path, 'show', f'{old["base_sha"]}:{old["path"]}').stdout
+    current = git(store.path, 'show', f'{current_base}:{old["path"]}').stdout
+    if protected_work_item_contract(original) != protected_work_item_contract(current):
+        raise RuntimeError('Work item contract changed since the reviewed result')
+    folder = Path(old['checkout']).resolve()
+    if (not folder.is_relative_to((root / 'work').resolve()) or not folder.exists() or
+            git(folder, 'status', '--porcelain').stdout or
+            git(folder, 'remote', 'get-url', 'origin').stdout.strip() != config['remote'] or
+            git(folder, 'branch', '--show-current').stdout.strip() != old['branch']):
+        raise RuntimeError('Preserved review checkout no longer matches the claim')
+    head = git(folder, 'rev-parse', 'HEAD').stdout.strip()
+    if head != old.get('result_commit'):
+        raise RuntimeError('Preserved review checkout head changed')
+    remote_head = git(folder, 'ls-remote', 'origin', 'refs/heads/' + old['branch']).stdout.split()
+    if not remote_head or remote_head[0] != head:
+        raise RuntimeError('Remote review branch head changed')
+    pr = verify_pr(config, old, github_api(config, 'GET', f'pulls/{pr_number}'))
+    if pr.get('head', {}).get('sha') != head:
+        raise RuntimeError('Draft PR head changed')
+    review = github_api(config, 'GET', f'pulls/{pr_number}/reviews/{review_id}')
+    reviewer = ((review.get('user') or {}).get('login') if isinstance(review, dict) else None)
+    expected_ref = f'https://github.com/{config["repository"]}/pull/{pr_number}#pullrequestreview-{review_id}'
+    if (not isinstance(review, dict) or str(review.get('id')) != review_id or
+            review.get('html_url') != expected_ref or reviewer not in reviewers or
+            review.get('commit_id') != head or not isinstance(review.get('body'), str) or
+            not review['body'].strip()):
+        raise RuntimeError('Manual review identity, author, body, or head is invalid')
+    command = {
+        'command_id': f'manual-review-{run_id}-{pr_number}-{review_id}',
+        'feedback_ref': expected_ref,
+        'feedback_sha256': hashlib.sha256(review['body'].encode('utf-8')).hexdigest(),
+        'feedback': review['body'],
+    }
+    return revision, state, old, command
+
+
+def claim_manual_review_resume(store, revision, state, old, command):
+    """Durably fence one exact review before the provider is resumed."""
+    state = copy.deepcopy(state)
+    record = copy.deepcopy(old)
+    snapshot = copy.deepcopy(old)
+    snapshot.pop('history', None)
+    attempt = uuid.uuid4().hex
+    record.update(attempt_id=attempt, status='running',
+                  run_url='manual-review:' + command['command_id'],
+                  started_at=now(), updated_at=now(),
+                  history=old.get('history', []) + [snapshot],
+                  manual_review_resume_id=command['command_id'])
+    record.pop('pending_publication', None)
+    record.update(pr_status='pending', pr_error=None)
+    state['claims'][record['wi']] = record
+    store.write(revision, state, f'{record["wi"]}: accept manual review resume')
+    return record
+
+
+def process_manual_review_resume(config, root, store, value):
+    pr_number, review_id = _manual_review_resume_input(value)
+    revision, state, old, command = _manual_review_resume_context(config, root, store, pr_number, review_id)
+    record = claim_manual_review_resume(store, revision, state, old, command)
+    run_revision(config, root, store, record, command)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', required=True)
@@ -1317,6 +1420,7 @@ def main():
     recovery.add_argument('--retry-wi', default='')
     recovery.add_argument('--publish-wi', default='')
     recovery.add_argument('--coordination-command', default='')
+    recovery.add_argument('--manual-review-resume', default='')
     args = parser.parse_args()
     config = json.loads(Path(args.config).read_text(encoding='utf-8-sig'))
     root = Path(config['root']).resolve()
@@ -1326,6 +1430,8 @@ def main():
         raise ValueError('Invalid publication WI')
     if args.coordination_command and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', args.coordination_command):
         raise ValueError('Invalid coordination command ID')
+    if args.manual_review_resume:
+        _manual_review_resume_input(args.manual_review_resume)
     with host_lock(Path(config.get('host_lock_root', str(root))).resolve()):
         store = Store(root / 'store.git', config['remote'])
         if args.publish_wi:
@@ -1336,6 +1442,9 @@ def main():
             raise RuntimeError('Codex version changed; validate bridge before dispatch')
         if args.coordination_command:
             process_coordination(config, root, store, args.coordination_command)
+            return 0
+        if args.manual_review_resume:
+            process_manual_review_resume(config, root, store, args.manual_review_resume)
             return 0
         run_url = os.environ.get('GITHUB_SERVER_URL', 'https://github.com') + '/' + config['repository'] + '/actions/runs/' + os.environ.get('GITHUB_RUN_ID', 'local')
         deadline = time.monotonic() + config.get('batch_seconds', 14400)
