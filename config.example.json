@@ -15,5 +15,7 @@
   "trusted_coordination_actors": [],
   "trusted_coordination_roles": [],
   "trusted_coordination_principals": [],
-  "coordination_authority_ref": ""
+  "coordination_authority_ref": "",
+  "manual_review_resume_owners": [],
+  "manual_review_resume_reviewers": []
 }
