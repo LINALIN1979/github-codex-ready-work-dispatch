@@ -37,14 +37,19 @@ if (Test-Path -LiteralPath $manifestPath) {
 if (-not (Test-Path -LiteralPath $Config)) { throw "Missing config: $Config" }
 if ($RetryWi -and $RetryWi -notmatch '^WI-\d+$') { throw 'RetryWi must look like WI-012.' }
 if ($PublishWi -and $PublishWi -notmatch '^WI-\d+$') { throw 'PublishWi must look like WI-012.' }
-if ($CoordinationCommand -and $CoordinationCommand -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}
+if ($CoordinationCommand -and $CoordinationCommand -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') { throw 'Invalid CoordinationCommand.' }
+if ($ManualReviewResume -and $ManualReviewResume -notmatch '^[1-9]\d{0,9}:[1-9]\d{0,19}$') { throw 'ManualReviewResume must be PR_NUMBER:REVIEW_ID.' }
+if (@($RetryWi, $PublishWi, $CoordinationCommand, $ManualReviewResume).Where({ $_ }).Count -gt 1) {
+    throw 'Choose one recovery action, never more than one.'
+}
 $settings = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
 
 function Resolve-CodexDesktopExecutable {
     param([object]$Settings, [string]$ConfigPath)
 
     $desktopRoot = [IO.Path]::GetFullPath(
-        (Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\bin')).TrimEnd('\')
+        (Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\bin')).TrimEnd([IO.Path]::DirectorySeparatorChar)
+    $managedPrefix = $desktopRoot + [IO.Path]::DirectorySeparatorChar
     $configured = [string]$Settings.codex
     $configuredPath = if ($configured) {
         [IO.Path]::GetFullPath($configured)
@@ -53,7 +58,7 @@ function Resolve-CodexDesktopExecutable {
     }
     # Only managed Codex Desktop paths are auto-refreshed. A host that deliberately
     # configured a different executable retains its explicit fail-closed behavior.
-    if (-not $configuredPath.StartsWith($desktopRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+    if (-not $configuredPath.StartsWith($managedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
         if (-not $configuredPath -or -not (Test-Path -LiteralPath $configuredPath -PathType Leaf)) {
             throw 'Configured Codex executable is missing.'
         }
@@ -111,159 +116,5 @@ if ($RetryWi) { $arguments += @('--retry-wi', $RetryWi) }
 if ($PublishWi) { $arguments += @('--publish-wi', $PublishWi) }
 if ($CoordinationCommand) { $arguments += @('--coordination-command', $CoordinationCommand) }
 if ($ManualReviewResume) { $arguments += @('--manual-review-resume', $ManualReviewResume) }
-& $settings.python @arguments
-if ($LASTEXITCODE -ne 0) { throw 'Dispatch stopped. Claims and local recovery files were preserved.' }
-) { throw 'Invalid CoordinationCommand.' }
-if ($ManualReviewResume -and $ManualReviewResume -notmatch '^[1-9]\d{0,9}:[1-9]\d{0,19}
-$settings = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
-
-function Resolve-CodexDesktopExecutable {
-    param([object]$Settings, [string]$ConfigPath)
-
-    $desktopRoot = [IO.Path]::GetFullPath(
-        (Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\bin')).TrimEnd('\')
-    $configured = [string]$Settings.codex
-    $configuredPath = if ($configured) {
-        [IO.Path]::GetFullPath($configured)
-    } else {
-        ''
-    }
-    # Only managed Codex Desktop paths are auto-refreshed. A host that deliberately
-    # configured a different executable retains its explicit fail-closed behavior.
-    if (-not $configuredPath.StartsWith($desktopRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
-        if (-not $configuredPath -or -not (Test-Path -LiteralPath $configuredPath -PathType Leaf)) {
-            throw 'Configured Codex executable is missing.'
-        }
-        return $configuredPath
-    }
-
-    $candidate = Get-ChildItem -LiteralPath $desktopRoot -Directory -ErrorAction SilentlyContinue |
-        ForEach-Object {
-            $path = Join-Path $_.FullName 'codex.exe'
-            if (Test-Path -LiteralPath $path -PathType Leaf) { Get-Item -LiteralPath $path }
-        } |
-        Sort-Object LastWriteTime -Descending |
-        ForEach-Object {
-            $version = (& $_.FullName --version 2>$null).Trim()
-            if ($LASTEXITCODE -eq 0 -and $version) {
-                [pscustomobject]@{ Path = $_.FullName; Version = $version }
-            }
-        } |
-        Select-Object -First 1
-
-    if (-not $candidate) {
-        throw 'No runnable Codex Desktop executable was found.'
-    }
-    if ($Settings.codex -ne $candidate.Path -or $Settings.codex_version -ne $candidate.Version) {
-        $Settings.codex = $candidate.Path
-        $Settings.codex_version = $candidate.Version
-        $Settings | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ConfigPath -Encoding utf8
-    }
-    return $candidate.Path
-}
-
-$resolvedCodex = Resolve-CodexDesktopExecutable $settings $Config
-$coordinationEnabled = [bool]$settings.coordination_ref
-if ($coordinationEnabled) {
-    $hasExplicitPrincipals = $null -ne $settings.trusted_coordination_principals
-    $hasLegacyTrust = $settings.trusted_coordination_actors -and $settings.trusted_coordination_roles
-    if ($settings.coordination_ref -notmatch '^refs/heads/codex/[A-Za-z0-9._/-]+$' -or
-        $settings.coordination_ref -eq 'refs/heads/codex/dispatch-state' -or
-        (-not $hasExplicitPrincipals -and -not $hasLegacyTrust) -or
-        ($hasExplicitPrincipals -and -not $settings.trusted_coordination_principals) -or
-        -not $settings.coordination_authority_ref) {
-        throw 'Coordination configuration is incomplete or unsafe.'
-    }
-} elseif ($CoordinationCommand) {
-    throw 'Coordination commands are disabled in this host config.'
-}
-if ($ValidateOnly) {
-    & $resolvedCodex --version
-    if ($LASTEXITCODE -ne 0) { throw 'Codex version check failed.' }
-    Write-Output "Dispatcher validated: $dispatcherVersion"
-    exit 0
-}
-$arguments = @((Join-Path $installDirectory 'bridge.py'), '--config', $Config)
-if ($RetryWi) { $arguments += @('--retry-wi', $RetryWi) }
-if ($PublishWi) { $arguments += @('--publish-wi', $PublishWi) }
-if ($CoordinationCommand) { $arguments += @('--coordination-command', $CoordinationCommand) }
-& $settings.python @arguments
-if ($LASTEXITCODE -ne 0) { throw 'Dispatch stopped. Claims and local recovery files were preserved.' }
-) { throw 'ManualReviewResume must be PR_NUMBER:REVIEW_ID.' }
-if (@($RetryWi, $PublishWi, $CoordinationCommand, $ManualReviewResume).Where({ $_ }).Count -gt 1) {
-    throw 'Choose one recovery action, never more than one.'
-}
-$settings = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
-
-function Resolve-CodexDesktopExecutable {
-    param([object]$Settings, [string]$ConfigPath)
-
-    $desktopRoot = [IO.Path]::GetFullPath(
-        (Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\bin')).TrimEnd('\')
-    $configured = [string]$Settings.codex
-    $configuredPath = if ($configured) {
-        [IO.Path]::GetFullPath($configured)
-    } else {
-        ''
-    }
-    # Only managed Codex Desktop paths are auto-refreshed. A host that deliberately
-    # configured a different executable retains its explicit fail-closed behavior.
-    if (-not $configuredPath.StartsWith($desktopRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
-        if (-not $configuredPath -or -not (Test-Path -LiteralPath $configuredPath -PathType Leaf)) {
-            throw 'Configured Codex executable is missing.'
-        }
-        return $configuredPath
-    }
-
-    $candidate = Get-ChildItem -LiteralPath $desktopRoot -Directory -ErrorAction SilentlyContinue |
-        ForEach-Object {
-            $path = Join-Path $_.FullName 'codex.exe'
-            if (Test-Path -LiteralPath $path -PathType Leaf) { Get-Item -LiteralPath $path }
-        } |
-        Sort-Object LastWriteTime -Descending |
-        ForEach-Object {
-            $version = (& $_.FullName --version 2>$null).Trim()
-            if ($LASTEXITCODE -eq 0 -and $version) {
-                [pscustomobject]@{ Path = $_.FullName; Version = $version }
-            }
-        } |
-        Select-Object -First 1
-
-    if (-not $candidate) {
-        throw 'No runnable Codex Desktop executable was found.'
-    }
-    if ($Settings.codex -ne $candidate.Path -or $Settings.codex_version -ne $candidate.Version) {
-        $Settings.codex = $candidate.Path
-        $Settings.codex_version = $candidate.Version
-        $Settings | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ConfigPath -Encoding utf8
-    }
-    return $candidate.Path
-}
-
-$resolvedCodex = Resolve-CodexDesktopExecutable $settings $Config
-$coordinationEnabled = [bool]$settings.coordination_ref
-if ($coordinationEnabled) {
-    $hasExplicitPrincipals = $null -ne $settings.trusted_coordination_principals
-    $hasLegacyTrust = $settings.trusted_coordination_actors -and $settings.trusted_coordination_roles
-    if ($settings.coordination_ref -notmatch '^refs/heads/codex/[A-Za-z0-9._/-]+$' -or
-        $settings.coordination_ref -eq 'refs/heads/codex/dispatch-state' -or
-        (-not $hasExplicitPrincipals -and -not $hasLegacyTrust) -or
-        ($hasExplicitPrincipals -and -not $settings.trusted_coordination_principals) -or
-        -not $settings.coordination_authority_ref) {
-        throw 'Coordination configuration is incomplete or unsafe.'
-    }
-} elseif ($CoordinationCommand) {
-    throw 'Coordination commands are disabled in this host config.'
-}
-if ($ValidateOnly) {
-    & $resolvedCodex --version
-    if ($LASTEXITCODE -ne 0) { throw 'Codex version check failed.' }
-    Write-Output "Dispatcher validated: $dispatcherVersion"
-    exit 0
-}
-$arguments = @((Join-Path $installDirectory 'bridge.py'), '--config', $Config)
-if ($RetryWi) { $arguments += @('--retry-wi', $RetryWi) }
-if ($PublishWi) { $arguments += @('--publish-wi', $PublishWi) }
-if ($CoordinationCommand) { $arguments += @('--coordination-command', $CoordinationCommand) }
 & $settings.python @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Dispatch stopped. Claims and local recovery files were preserved.' }
